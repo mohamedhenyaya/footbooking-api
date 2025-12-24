@@ -1,0 +1,15 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: footbooking-postgres
+    environment:
+      POSTGRES_DB: footbooking
+      POSTGRES_USER: footbooking
+      POSTGRES_PASSWORD: footbooking
+    ports:
+      - "5434:5432"
+    volumes:
+      - footbooking_pgdata:/var/lib/postgresql/data
+
+volumes:
+  footbooking_pgdata:
