@@ -29,4 +29,17 @@ public class Tournament {
 
     private Integer maxTeams;
     private Integer remainingTeams;
+
+    @Column(columnDefinition = "TEXT")
+    private String description;
+
+    @Column(columnDefinition = "TEXT")
+    private String rules;
+
+    private String organizer;
+
+    private String status; // inscription_ouverte, en_cours, terminé
+
+    @Column(name = "image_url")
+    private String imageUrl;
 }

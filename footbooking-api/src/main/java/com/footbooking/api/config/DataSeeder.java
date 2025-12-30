@@ -90,10 +90,14 @@ public class DataSeeder implements CommandLineRunner {
         }
 
         private User createUser(String name, String email, String password) {
+                // Generate a random avatar URL (using a placeholder service)
+                String avatar = "https://i.pravatar.cc/150?u=" + email;
+
                 return User.builder()
                                 .name(name)
                                 .email(email)
                                 .password(password)
+                                .avatar(avatar)
                                 .score(random.nextInt(1000)) // Random score 0-999
                                 .createdAt(LocalDateTime.now())
                                 .enabled(true)
@@ -136,6 +140,10 @@ public class DataSeeder implements CommandLineRunner {
                 LocalDate start = LocalDate.now().plusDays(random.nextInt(90));
                 LocalDate end = start.plusDays(2 + random.nextInt(5));
 
+                String[] organizers = { "FootPro Events", "SportCity", "Urban League", "Elite Sports",
+                                "Champions Org" };
+                String[] statuses = { "inscription_ouverte", "en_cours", "terminé" };
+
                 return Tournament.builder()
                                 .name(name)
                                 .type(type)
@@ -146,6 +154,11 @@ public class DataSeeder implements CommandLineRunner {
                                 .endDate(end)
                                 .maxTeams(max)
                                 .remainingTeams(random.nextInt(max + 1))
+                                .description("Tournoi de football compétitif avec des équipes de haut niveau. Inscription ouverte à tous les niveaux.")
+                                .rules("Règles FIFA standard. 2x 30 minutes. Pénalités en cas d'égalité.")
+                                .organizer(organizers[random.nextInt(organizers.length)])
+                                .status(statuses[random.nextInt(statuses.length)])
+                                .imageUrl("https://picsum.photos/seed/" + name.hashCode() + "/800/600")
                                 .build();
         }
 

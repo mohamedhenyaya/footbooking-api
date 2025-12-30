@@ -30,12 +30,15 @@ public class User {
     private String password;
 
     @Column(nullable = false)
+    @Builder.Default
     private boolean enabled = true;
 
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
     private String name;
+
+    private String avatar;
 
     @Builder.Default
     private Integer score = 0;

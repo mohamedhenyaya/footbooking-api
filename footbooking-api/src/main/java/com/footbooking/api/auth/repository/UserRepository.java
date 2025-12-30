@@ -12,5 +12,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     List<User> findAllByOrderByScoreDesc();
 
+    Long countByScoreGreaterThan(Integer score);
+
     boolean existsByEmail(String email);
 }

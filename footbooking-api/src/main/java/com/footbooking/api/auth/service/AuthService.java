@@ -5,6 +5,7 @@ import com.footbooking.api.auth.model.User;
 import com.footbooking.api.auth.repository.RoleRepository;
 import com.footbooking.api.auth.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.*;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -29,26 +30,23 @@ public class AuthService {
     private final JwtService jwtService;
     private final CustomUserDetailsService userDetailsService;
 
-    // Stockage temporaire des codes OTP (Clé: Numéro de téléphone, Valeur: Code)
+    // Récupère l'URL Cloudflare du serveur Node.js depuis application.properties
+    @Value("${whatsapp.service.url}")
+    private String whatsappServiceUrl;
+
     private final Map<String, OtpData> otpStorage = new ConcurrentHashMap<>();
 
     /**
-     * Génère et envoie un code OTP par WhatsApp
+     * Génère et envoie un code OTP par WhatsApp via le tunnel Cloudflare
      */
     public void sendWhatsAppOtp(String phoneNumber) {
         String otp = String.format("%06d", new Random().nextInt(999999));
-
-        // On enregistre l'objet OtpData (qui contient le timer de 5 min)
         otpStorage.put(phoneNumber, new OtpData(otp));
 
         RestTemplate restTemplate = new RestTemplate();
         Map<String, Object> body = new HashMap<>();
 
-        // 1. On nettoie le numéro (enlève tout ce qui n'est pas un chiffre)
         String cleanNumber = phoneNumber.replaceAll("\\D", "");
-
-        // 2. On s'assure que le numéro commence par 222 (Mauritanie)
-        // Si l'utilisateur a saisi 8 chiffres (ex: 42302133), on ajoute 222
         if (cleanNumber.length() == 8) {
             cleanNumber = "222" + cleanNumber;
         }
@@ -57,116 +55,94 @@ public class AuthService {
         body.put("message", "Votre code de vérification FootBooking est : " + otp);
 
         try {
-            restTemplate.postForEntity("http://localhost:8082/send-otp", body, String.class);
-            System.out.println("✅ OTP envoyé au : " + cleanNumber);
+            // Utilise l'URL dynamique au lieu de localhost:8082
+            restTemplate.postForEntity(whatsappServiceUrl + "/send-otp", body, String.class);
+            System.out.println("✅ OTP envoyé via tunnel à : " + cleanNumber);
         } catch (Exception e) {
-            System.out.println("❌ Erreur Node.js: " + e.getMessage());
-            System.out.println("👉 CODE OTP (Console): " + otp);
+            System.out.println("❌ Erreur Tunnel Node.js: " + e.getMessage());
+            System.out.println("👉 CODE OTP (Backup Console): " + otp);
         }
     }
+
     /**
-     * Valide l'inscription finale avec OTP et Mot de passe
+     * Valide l'inscription finale
      */
     public AuthResponse registerWithWhatsApp(WhatsAppRegisterRequest req) {
-        // 1. On récupère l'OTP stocké
-        OtpData savedOtpData = otpStorage.get(req.phoneNumber());
+        // Validation de l'OTP
+        validateOtp(req.phoneNumber(), req.otpCode());
 
-        if (savedOtpData == null || !savedOtpData.code.equals(req.otpCode())) {
-            throw new IllegalStateException("Code OTP invalide");
-        }
-
-        if (savedOtpData.isExpired()) {
-            otpStorage.remove(req.phoneNumber());
-            throw new IllegalStateException("Le code OTP a expiré");
-        }
-
-        // 2. On vérifie si l'identifiant existe déjà
         if (userRepository.existsByEmail(req.phoneNumber())) {
             throw new IllegalStateException("Ce numéro est déjà enregistré");
         }
 
-        // 3. Création SANS les rôles (pour éviter l'erreur de table vide)
         User user = User.builder()
-                .email(req.phoneNumber()) // Stocké dans la colonne email
-                .phone(req.phoneNumber()) // Stocké aussi dans la colonne phone (ton image pgAdmin montre cette colonne)
+                .email(req.phoneNumber())
+                .phone(req.phoneNumber())
                 .password(passwordEncoder.encode(req.password()))
                 .name("Joueur " + req.phoneNumber())
                 .enabled(true)
                 .createdAt(LocalDateTime.now())
-                .roles(new HashSet<>()) // On initialise un set vide
+                .roles(new HashSet<>())
                 .build();
 
-        // 4. Sauvegarde physique
-        try {
-            userRepository.save(user);
-            System.out.println("✅ UTILISATEUR ENREGISTRÉ DANS PGADMIN : " + req.phoneNumber());
-        } catch (Exception e) {
-            System.out.println("❌ ERREUR BASE DE DONNÉES : " + e.getMessage());
-            throw new RuntimeException("Erreur lors de l'écriture en base de données");
-        }
+        userRepository.save(user);
 
-        // 5. Nettoyage et Token
         otpStorage.remove(req.phoneNumber());
         UserDetails details = userDetailsService.loadUserByUsername(req.phoneNumber());
         return new AuthResponse(jwtService.generateToken(details));
     }
+
+    /**
+     * Réinitialise le mot de passe
+     */
+    public void resetPassword(WhatsAppRegisterRequest req) {
+        validateOtp(req.phoneNumber(), req.otpCode());
+
+        User user = userRepository.findByEmail(req.phoneNumber())
+                .orElseThrow(() -> new IllegalStateException("Utilisateur non trouvé"));
+
+        user.setPassword(passwordEncoder.encode(req.password()));
+        userRepository.save(user);
+
+        otpStorage.remove(req.phoneNumber());
+        System.out.println("✅ Mot de passe réinitialisé pour : " + req.phoneNumber());
+    }
+
+    /**
+     * Méthode utilitaire interne pour valider l'OTP
+     */
+    private void validateOtp(String phone, String code) {
+        OtpData savedOtpData = otpStorage.get(phone);
+
+        if (savedOtpData == null || !savedOtpData.code.equals(code)) {
+            throw new IllegalStateException("Code OTP invalide");
+        }
+
+        if (savedOtpData.isExpired()) {
+            otpStorage.remove(phone);
+            throw new IllegalStateException("Le code OTP a expiré");
+        }
+    }
+
     public AuthResponse login(LoginRequest req) {
         authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(req.email(), req.password())
-        );
-
+                new UsernamePasswordAuthenticationToken(req.email(), req.password()));
         var userDetails = userDetailsService.loadUserByUsername(req.email());
         return new AuthResponse(jwtService.generateToken(userDetails));
     }
 
-    // On peut garder l'ancien register si on veut laisser le choix (Email vs WhatsApp)
-    public AuthResponse register(RegisterRequest req) {
-        if (userRepository.existsByEmail(req.email())) {
-            throw new IllegalStateException("Email déjà utilisé");
-        }
-        // ... (reste de ta logique register par email)
-        return null; // Simplifié pour l'exemple
-    }
+    // Classe interne pour les données OTP
     private static class OtpData {
         String code;
         LocalDateTime expiryTime;
 
         OtpData(String code) {
             this.code = code;
-            this.expiryTime = LocalDateTime.now().plusMinutes(5); // Définit l'expiration
+            this.expiryTime = LocalDateTime.now().plusMinutes(5);
         }
 
         boolean isExpired() {
             return LocalDateTime.now().isAfter(expiryTime);
         }
-    }
-
-    /**
-     * Réinitialise le mot de passe après vérification de l'OTP
-     */
-    public void resetPassword(WhatsAppRegisterRequest req) { // On réutilise le même DTO car il contient phone, otp et password
-        // 1. Vérification de l'OTP (Même logique que l'inscription)
-        OtpData savedOtpData = otpStorage.get(req.phoneNumber());
-
-        if (savedOtpData == null || !savedOtpData.code.equals(req.otpCode())) {
-            throw new IllegalStateException("Code OTP invalide");
-        }
-
-        if (savedOtpData.isExpired()) {
-            otpStorage.remove(req.phoneNumber());
-            throw new IllegalStateException("Le code OTP a expiré");
-        }
-
-        // 2. Recherche de l'utilisateur
-        User user = userRepository.findByEmail(req.phoneNumber()) // Rappel: vous stockez le phone dans la colonne email
-                .orElseThrow(() -> new IllegalStateException("Utilisateur non trouvé"));
-
-        // 3. Mise à jour du mot de passe
-        user.setPassword(passwordEncoder.encode(req.password()));
-        userRepository.save(user);
-
-        // 4. Nettoyage
-        otpStorage.remove(req.phoneNumber());
-        System.out.println("✅ Mot de passe réinitialisé pour : " + req.phoneNumber());
     }
 }

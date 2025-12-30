@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.*;
 public class BookingController {
 
     private final BookingService bookingService;
+
     @GetMapping("/me")
     public java.util.List<BookingResponseDto> myBookings() {
         return bookingService.getMyBookings();
@@ -21,5 +22,12 @@ public class BookingController {
     @PostMapping
     public BookingResponseDto createBooking(@RequestBody @Valid BookingRequestDto request) {
         return bookingService.createBooking(request);
+    }
+
+    @DeleteMapping("/{id}")
+    public org.springframework.http.ResponseEntity<?> cancelBooking(@PathVariable Long id) {
+        bookingService.cancelBooking(id);
+        return org.springframework.http.ResponseEntity
+                .ok(java.util.Map.of("message", "Booking cancelled successfully"));
     }
 }

@@ -40,20 +40,19 @@ public class BookingService {
                     userId,
                     request.terrainId(),
                     request.date(),
-                    request.hour()
-            );
+                    request.hour());
 
             return new BookingResponseDto(
                     bookingId,
                     request.terrainId(),
                     request.date(),
-                    request.hour()
-            );
+                    request.hour());
 
         } catch (DuplicateKeyException ex) {
             throw new SlotAlreadyBookedException();
         }
     }
+
     public List<BookingResponseDto> getMyBookings() {
         String email = SecurityContextHolder.getContext().getAuthentication().getName();
 
@@ -62,6 +61,18 @@ public class BookingService {
                 .getId();
 
         return bookingJdbcRepository.findBookingsByUserId(userId);
+    }
+
+    public void cancelBooking(Long bookingId) {
+        String email = SecurityContextHolder.getContext().getAuthentication().getName();
+        Long userId = userRepository.findByEmail(email)
+                .orElseThrow(() -> new UsernameNotFoundException("User not found: " + email))
+                .getId();
+
+        boolean deleted = bookingJdbcRepository.deleteBooking(bookingId, userId);
+        if (!deleted) {
+            throw new RuntimeException("Booking not found or does not belong to user");
+        }
     }
 
 }

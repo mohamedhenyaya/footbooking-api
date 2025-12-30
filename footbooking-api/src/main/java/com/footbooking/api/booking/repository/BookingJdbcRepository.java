@@ -16,54 +16,59 @@ public class BookingJdbcRepository {
 
     public List<Integer> findBookedHours(Long terrainId, LocalDate date) {
         String sql = """
-            SELECT booking_hour
-            FROM bookings
-            WHERE terrain_id = ? AND booking_date = ?
-            ORDER BY booking_hour
-        """;
+                    SELECT booking_hour
+                    FROM bookings
+                    WHERE terrain_id = ? AND booking_date = ?
+                    ORDER BY booking_hour
+                """;
         return jdbcTemplate.queryForList(sql, Integer.class, terrainId, date);
     }
+
     public Long createBooking(Long userId, Long terrainId, LocalDate date, int hour) {
         String sql = """
-        INSERT INTO bookings (user_id, terrain_id, booking_date, booking_hour)
-        VALUES (?, ?, ?, ?)
-        RETURNING id
-    """;
+                    INSERT INTO bookings (user_id, terrain_id, booking_date, booking_hour)
+                    VALUES (?, ?, ?, ?)
+                    RETURNING id
+                """;
         return jdbcTemplate.queryForObject(
                 sql,
                 Long.class,
                 userId,
                 terrainId,
                 date,
-                hour
-        );
+                hour);
     }
+
     public List<BookingResponseDto> findBookingsByUserId(Long userId) {
         String sql = """
-        SELECT b.id, b.terrain_id, b.booking_date, b.booking_hour, t.name, t.city
-        FROM bookings b
-        JOIN terrain t ON b.terrain_id = t.id
-        WHERE b.user_id = ?
-        ORDER BY b.id DESC
-    """;
+                    SELECT b.id, b.terrain_id, b.booking_date, b.booking_hour, t.name, t.city
+                    FROM bookings b
+                    JOIN terrain t ON b.terrain_id = t.id
+                    WHERE b.user_id = ?
+                    ORDER BY b.id DESC
+                """;
 
-        return jdbcTemplate.query(sql, (rs, rowNum) ->
-                new BookingResponseDto(
-                        rs.getLong("id"),
-                        rs.getLong("terrain_id"),
-                        rs.getString("name"),
-                        rs.getString("city"),
-                        rs.getDate("booking_date").toLocalDate(),
-                        rs.getInt("booking_hour")
-                ), userId);
+        return jdbcTemplate.query(sql, (rs, rowNum) -> new BookingResponseDto(
+                rs.getLong("id"),
+                rs.getLong("terrain_id"),
+                rs.getString("name"),
+                rs.getString("city"),
+                rs.getDate("booking_date").toLocalDate(),
+                rs.getInt("booking_hour")), userId);
+    }
+
+    public boolean deleteBooking(Long bookingId, Long userId) {
+        String sql = "DELETE FROM bookings WHERE id = ? AND user_id = ?";
+        int rowsAffected = jdbcTemplate.update(sql, bookingId, userId);
+        return rowsAffected > 0;
     }
 
     public List<Long> findOccupiedTerrainIds(LocalDate date, int hour) {
         String sql = """
-        SELECT terrain_id
-        FROM bookings
-        WHERE booking_date = ? AND booking_hour = ?
-    """;
+                    SELECT terrain_id
+                    FROM bookings
+                    WHERE booking_date = ? AND booking_hour = ?
+                """;
         return jdbcTemplate.queryForList(sql, Long.class, date, hour);
     }
 }

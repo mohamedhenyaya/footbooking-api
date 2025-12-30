@@ -37,6 +37,8 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers("/api/auth/**").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/terrains/*/reviews").authenticated() // Reviews require
+                                                                                                     // auth
                         .requestMatchers("/api/terrains/**").permitAll()
                         .requestMatchers("/api/rankings/**").permitAll()
                         .requestMatchers("/api/tournaments/**").permitAll()

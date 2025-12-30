@@ -31,6 +31,19 @@ public class Terrain {
     @Column(nullable = false)
     private boolean indoor;
 
+    @Column(columnDefinition = "TEXT")
+    private String description;
+
+    @Column(columnDefinition = "TEXT")
+    private String amenities; // JSON array of amenities
+
+    private String surface; // gazon, synthétique, etc.
+
+    private Integer capacity; // max number of players
+
+    @Column(precision = 3, scale = 2)
+    private BigDecimal rating; // average rating
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 }
