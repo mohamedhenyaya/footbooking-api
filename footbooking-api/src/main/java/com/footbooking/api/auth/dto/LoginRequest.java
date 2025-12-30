@@ -4,6 +4,9 @@ import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 
 public record LoginRequest(
-        @Email @NotBlank String email,
-        @NotBlank String password
+        @NotBlank(message = "Le numéro de téléphone ou l'email est requis")
+        String email,
+
+        @NotBlank(message = "Le mot de passe est requis")
+        String password
 ) {}

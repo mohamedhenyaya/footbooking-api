@@ -33,5 +33,11 @@ public class TerrainController {
     ) {
         return terrainAvailabilityService.getAvailability(id, date);
     }
-
+    @GetMapping("/available")
+    public List<TerrainResponseDto> getAvailableTerrains(
+            @RequestParam LocalDate date,
+            @RequestParam int hour
+    ) {
+        return terrainService.getAvailableTerrains(date, hour);
+    }
 }

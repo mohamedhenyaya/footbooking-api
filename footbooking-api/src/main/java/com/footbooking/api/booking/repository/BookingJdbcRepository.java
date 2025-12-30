@@ -40,19 +40,30 @@ public class BookingJdbcRepository {
     }
     public List<BookingResponseDto> findBookingsByUserId(Long userId) {
         String sql = """
-            SELECT id, terrain_id, booking_date, booking_hour
-            FROM bookings
-            WHERE user_id = ?
-            ORDER BY booking_date DESC, booking_hour DESC
-        """;
+        SELECT b.id, b.terrain_id, b.booking_date, b.booking_hour, t.name, t.city
+        FROM bookings b
+        JOIN terrain t ON b.terrain_id = t.id
+        WHERE b.user_id = ?
+        ORDER BY b.id DESC
+    """;
 
         return jdbcTemplate.query(sql, (rs, rowNum) ->
                 new BookingResponseDto(
                         rs.getLong("id"),
                         rs.getLong("terrain_id"),
+                        rs.getString("name"),
+                        rs.getString("city"),
                         rs.getDate("booking_date").toLocalDate(),
                         rs.getInt("booking_hour")
                 ), userId);
     }
 
+    public List<Long> findOccupiedTerrainIds(LocalDate date, int hour) {
+        String sql = """
+        SELECT terrain_id
+        FROM bookings
+        WHERE booking_date = ? AND booking_hour = ?
+    """;
+        return jdbcTemplate.queryForList(sql, Long.class, date, hour);
+    }
 }
