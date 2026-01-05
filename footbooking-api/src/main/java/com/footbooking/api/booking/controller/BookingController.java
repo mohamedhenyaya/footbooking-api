@@ -5,6 +5,7 @@ import com.footbooking.api.booking.dto.BookingResponseDto;
 import com.footbooking.api.booking.service.BookingService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -29,5 +30,17 @@ public class BookingController {
         bookingService.cancelBooking(id);
         return org.springframework.http.ResponseEntity
                 .ok(java.util.Map.of("message", "Booking cancelled successfully"));
+    }
+
+    @PutMapping("/{id}/accept")
+    public ResponseEntity<?> acceptBooking(@PathVariable Long id) {
+        bookingService.adminAcceptBooking(id);
+        return ResponseEntity.ok(java.util.Map.of("message", "Booking accepted successfully"));
+    }
+
+    @PutMapping("/{id}/cancel")
+    public ResponseEntity<?> adminCancelBooking(@PathVariable Long id) {
+        bookingService.adminCancelBooking(id);
+        return ResponseEntity.ok(java.util.Map.of("message", "Booking cancelled by admin successfully"));
     }
 }

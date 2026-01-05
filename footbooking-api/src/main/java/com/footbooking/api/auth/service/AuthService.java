@@ -15,6 +15,7 @@ import org.springframework.web.client.RestTemplate;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.ConcurrentHashMap;
@@ -129,6 +130,44 @@ public class AuthService {
                 new UsernamePasswordAuthenticationToken(req.email(), req.password()));
         var userDetails = userDetailsService.loadUserByUsername(req.email());
         return new AuthResponse(jwtService.generateToken(userDetails));
+    }
+
+    public AuthMeResponse getMe(String email) {
+        var user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        var roles = user.getRoles().stream()
+                .map(r -> "ROLE_" + r.getName())
+                .toList();
+
+        return new AuthMeResponse(
+                user.getId(),
+                user.getEmail(),
+                user.getName(),
+                roles);
+    }
+
+    public void createAdmin(CreateAdminRequest req) {
+        if (userRepository.existsByEmail(req.email())) {
+            throw new IllegalStateException("Un utilisateur avec cet email existe déjà");
+        }
+
+        var adminRole = roleRepository.findByName("ADMIN")
+                .orElseThrow(() -> new IllegalStateException("Role ADMIN not found"));
+
+        var roles = new HashSet<com.footbooking.api.auth.model.Role>();
+        roles.add(adminRole);
+
+        User user = User.builder()
+                .name(req.name())
+                .email(req.email())
+                .password(passwordEncoder.encode(req.password()))
+                .enabled(true)
+                .createdAt(LocalDateTime.now())
+                .roles(roles)
+                .build();
+
+        userRepository.save(user);
     }
 
     // Classe interne pour les données OTP

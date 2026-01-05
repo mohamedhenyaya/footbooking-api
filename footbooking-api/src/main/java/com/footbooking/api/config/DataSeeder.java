@@ -1,5 +1,7 @@
 package com.footbooking.api.config;
 
+import com.footbooking.api.auth.model.Role;
+import com.footbooking.api.auth.repository.RoleRepository;
 import com.footbooking.api.auth.model.User;
 import com.footbooking.api.auth.repository.UserRepository;
 import com.footbooking.api.booking.repository.BookingJdbcRepository;
@@ -12,35 +14,53 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Random;
+import java.util.Set;
 
 @Component
 @RequiredArgsConstructor
 @Slf4j
+@Transactional
 public class DataSeeder implements CommandLineRunner {
 
         private final UserRepository userRepository;
+        private final RoleRepository roleRepository;
         private final TournamentRepository tournamentRepository;
         private final TerrainRepository terrainRepository;
         private final BookingJdbcRepository bookingJdbcRepository;
         private final PasswordEncoder passwordEncoder;
+        private final org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
 
         private final Random random = new Random();
 
         @Override
         public void run(String... args) throws Exception {
                 log.info("Starting Data Seeding...");
+                seedRoles();
                 seedUsers();
                 seedTournaments();
                 seedTerrains();
                 seedBookings();
+                ensureAssignments();
+                updateSchema();
                 log.info("Data Seeding Completed.");
+        }
+
+        private void seedRoles() {
+                if (roleRepository.count() == 0) {
+                        roleRepository.save(Role.builder().name("USER").build());
+                        roleRepository.save(Role.builder().name("ADMIN").build());
+                        roleRepository.save(Role.builder().name("SUPERADMIN").build());
+                        log.info("Seeded Roles: USER, ADMIN, SUPERADMIN");
+                }
         }
 
         private void seedUsers() {
@@ -53,10 +73,33 @@ public class DataSeeder implements CommandLineRunner {
                         userRepository.deleteAll(badUsers);
                 }
 
+                Set<Role> userRole = new HashSet<>();
+                roleRepository.findByName("USER").ifPresent(userRole::add);
+
                 // Ensure test user exists
                 if (!userRepository.existsByEmail("test@fb.com")) {
-                        userRepository.save(createUser("Test User", "test@fb.com", passwordEncoder.encode("123456")));
+                        userRepository.save(createUser("Test User", "test@fb.com", passwordEncoder.encode("123456"),
+                                        userRole));
                         log.info("Seeded test user: test@fb.com");
+                }
+
+                // Ensure admin user exists
+                if (!userRepository.existsByEmail("admin@fb.com")) {
+                        Set<Role> adminRoles = new HashSet<>(userRole);
+                        roleRepository.findByName("ADMIN").ifPresent(adminRoles::add);
+                        userRepository.save(createUser("Admin User", "admin@fb.com", passwordEncoder.encode("123456"),
+                                        adminRoles));
+                        log.info("Seeded admin user: admin@fb.com");
+                }
+
+                // Ensure superadmin user exists
+                if (!userRepository.existsByEmail("superadmin@fb.com")) {
+                        Set<Role> superRoles = new HashSet<>(userRole);
+                        roleRepository.findByName("ADMIN").ifPresent(superRoles::add);
+                        roleRepository.findByName("SUPERADMIN").ifPresent(superRoles::add);
+                        userRepository.save(createUser("Super Admin", "superadmin@fb.com",
+                                        passwordEncoder.encode("123456"), superRoles));
+                        log.info("Seeded superadmin user: superadmin@fb.com");
                 }
 
                 if (userRepository.count() >= 50) {
@@ -79,7 +122,7 @@ public class DataSeeder implements CommandLineRunner {
                 for (String name : names) {
                         String email = name.toLowerCase() + "@example.com";
                         if (!userRepository.existsByEmail(email)) {
-                                usersToSave.add(createUser(name, email, defaultPass));
+                                usersToSave.add(createUser(name, email, defaultPass, userRole));
                         }
                 }
 
@@ -89,7 +132,7 @@ public class DataSeeder implements CommandLineRunner {
                 }
         }
 
-        private User createUser(String name, String email, String password) {
+        private User createUser(String name, String email, String password, Set<Role> roles) {
                 // Generate a random avatar URL (using a placeholder service)
                 String avatar = "https://i.pravatar.cc/150?u=" + email;
 
@@ -101,6 +144,7 @@ public class DataSeeder implements CommandLineRunner {
                                 .score(random.nextInt(1000)) // Random score 0-999
                                 .createdAt(LocalDateTime.now())
                                 .enabled(true)
+                                .roles(roles)
                                 .build();
         }
 
@@ -229,7 +273,8 @@ public class DataSeeder implements CommandLineRunner {
                         List<Integer> bookedHours = bookingJdbcRepository.findBookedHours(terrain.getId(), date);
                         if (!bookedHours.contains(hour)) {
                                 try {
-                                        bookingJdbcRepository.createBooking(user.getId(), terrain.getId(), date, hour);
+                                        bookingJdbcRepository.createBooking(user.getId(), terrain.getId(), date, hour,
+                                                        "confirmée");
                                         created++;
                                 } catch (Exception e) {
                                         // Ignore conflicts
@@ -237,5 +282,46 @@ public class DataSeeder implements CommandLineRunner {
                         }
                 }
                 log.info("Seeded {} bookings.", created);
+        }
+
+        private void ensureAssignments() {
+                userRepository.findByEmail("admin@fb.com").ifPresent(admin -> {
+                        userRepository.findByEmail("superadmin@fb.com").ifPresent(superAdmin -> {
+                                List<Terrain> terrains = terrainRepository.findAll();
+                                boolean updated = false;
+                                for (Terrain terrain : terrains) {
+                                        // Assign "Five Paris 17" to admin, others to superadmin
+                                        if ("Five Paris 17".equalsIgnoreCase(terrain.getName())) {
+                                                if (terrain.getOwner() == null || !terrain.getOwner().getEmail()
+                                                                .equals(admin.getEmail())) {
+                                                        terrain.setOwner(admin);
+                                                        terrainRepository.save(terrain);
+                                                        updated = true;
+                                                }
+                                        } else {
+                                                // All others to superadmin
+                                                if (terrain.getOwner() == null || terrain.getOwner().getEmail()
+                                                                .equals(admin.getEmail())) {
+                                                        terrain.setOwner(superAdmin);
+                                                        terrainRepository.save(terrain);
+                                                        updated = true;
+                                                }
+                                        }
+                                }
+                                if (updated) {
+                                        log.info("Re-assigned terrains: 'Five Paris 17' to Admin, others to SuperAdmin.");
+                                }
+                        });
+                });
+        }
+
+        private void updateSchema() {
+                try {
+                        // Ensure status column exists
+                        jdbcTemplate.execute(
+                                        "ALTER TABLE bookings ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'confirmée'");
+                } catch (Exception e) {
+                        log.warn("Could not update schema (ensure status column): {}", e.getMessage());
+                }
         }
 }

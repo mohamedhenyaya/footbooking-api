@@ -19,11 +19,6 @@ public class AuthController {
 
     private final AuthService authService;
 
-    @PostMapping("/register")
-    public AuthResponse register(@Valid @RequestBody RegisterRequest req) {
-        return authService.register(req);
-    }
-
     @PostMapping("/login")
     public AuthResponse login(@Valid @RequestBody LoginRequest req) {
         return authService.login(req);
@@ -34,12 +29,7 @@ public class AuthController {
         if (user == null) {
             throw new RuntimeException("User not authenticated");
         }
-        return new AuthMeResponse(
-                user.getUsername(),
-                user.getAuthorities().stream()
-                        .map(a -> a.getAuthority())
-                        .toList()
-        );
+        return authService.getMe(user.getUsername());
     }
     // Dans AuthController.java
     @PostMapping("/whatsapp/request-otp")
@@ -58,5 +48,11 @@ public class AuthController {
     public ResponseEntity<?> resetPassword(@Valid @RequestBody WhatsAppRegisterRequest req) {
         authService.resetPassword(req);
         return ResponseEntity.ok(Map.of("message", "Votre mot de passe a été modifié avec succès."));
+    }
+
+    @PostMapping("/create-admin")
+    public ResponseEntity<?> createAdmin(@Valid @RequestBody CreateAdminRequest req) {
+        authService.createAdmin(req);
+        return ResponseEntity.ok(Map.of("message", "Admin created successfully"));
     }
 }

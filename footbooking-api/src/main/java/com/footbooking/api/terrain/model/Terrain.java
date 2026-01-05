@@ -1,5 +1,6 @@
 package com.footbooking.api.terrain.model;
 
+import com.footbooking.api.auth.model.User;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -46,4 +47,12 @@ public class Terrain {
 
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "owner_id")
+    private User owner;
+
+    @ManyToMany
+    @JoinTable(name = "terrain_whitelist", joinColumns = @JoinColumn(name = "terrain_id"), inverseJoinColumns = @JoinColumn(name = "user_id"))
+    private java.util.Set<User> whitelist = new java.util.HashSet<>();
 }

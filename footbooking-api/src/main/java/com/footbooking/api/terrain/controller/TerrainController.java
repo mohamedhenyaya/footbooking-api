@@ -27,8 +27,27 @@ public class TerrainController {
     private final TerrainAvailabilityService terrainAvailabilityService;
 
     @GetMapping
-    public List<TerrainResponseDto> getAllTerrains() {
+    public List<TerrainResponseDto> getAllTerrains(@AuthenticationPrincipal UserDetails user) {
+        if (user != null) {
+            boolean isAdmin = user.getAuthorities().stream()
+                    .anyMatch(a -> a.getAuthority().equals("ADMIN") || a.getAuthority().equals("ROLE_ADMIN"));
+            boolean isSuperAdmin = user.getAuthorities().stream()
+                    .anyMatch(a -> a.getAuthority().equals("SUPERADMIN") || a.getAuthority().equals("ROLE_SUPERADMIN"));
+
+            if (isAdmin && !isSuperAdmin) {
+                System.out.println("DEBUG: User " + user.getUsername() + " is ADMIN. Returning owned terrains.");
+                return terrainService.getMyTerrains(user.getUsername());
+            } else {
+                System.out.println("DEBUG: User " + user.getUsername() + " is NOT restricted (Admin=" + isAdmin
+                        + ", Super=" + isSuperAdmin + ")");
+            }
+        }
         return terrainService.getAllTerrains();
+    }
+
+    @GetMapping("/my-terrains")
+    public List<TerrainResponseDto> getMyTerrains(@AuthenticationPrincipal UserDetails user) {
+        return terrainService.getMyTerrains(user.getUsername());
     }
 
     @GetMapping("/{id}")
@@ -72,5 +91,57 @@ public class TerrainController {
             @RequestParam LocalDate date,
             @RequestParam int hour) {
         return terrainService.getAvailableTerrains(date, hour);
+    }
+
+    @PostMapping
+    public ResponseEntity<TerrainResponseDto> createTerrain(
+            @Valid @RequestBody com.footbooking.api.terrain.dto.TerrainRequestDto request,
+            @AuthenticationPrincipal UserDetails user) {
+        return ResponseEntity.ok(terrainService.createTerrain(request, user.getUsername()));
+    }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<TerrainResponseDto> updateTerrain(
+            @PathVariable Long id,
+            @Valid @RequestBody com.footbooking.api.terrain.dto.TerrainRequestDto request,
+            @AuthenticationPrincipal UserDetails user) {
+        return ResponseEntity.ok(terrainService.updateTerrain(id, request, user.getUsername()));
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteTerrain(
+            @PathVariable Long id,
+            @AuthenticationPrincipal UserDetails user) {
+        terrainService.deleteTerrain(id, user.getUsername());
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/{id}/whitelist")
+    public ResponseEntity<?> whitelistUserByIdentifier(
+            @PathVariable Long id,
+            @RequestBody java.util.Map<String, String> body,
+            @AuthenticationPrincipal UserDetails user) {
+        String identifier = body.get("login");
+        if (identifier == null) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Login (email) is required"));
+        }
+        terrainService.addUserToWhitelistByIdentifier(id, identifier, user.getUsername());
+        return ResponseEntity.ok(Map.of("message", "User added to whitelist successfully"));
+    }
+
+    @GetMapping("/{id}/whitelist")
+    public ResponseEntity<java.util.Set<com.footbooking.api.booking.dto.UserSummaryDto>> getWhitelist(
+            @PathVariable Long id,
+            @AuthenticationPrincipal UserDetails user) {
+        return ResponseEntity.ok(terrainService.getWhitelist(id, user.getUsername()));
+    }
+
+    @DeleteMapping("/{id}/whitelist/{identifier}")
+    public ResponseEntity<?> removeFromWhitelist(
+            @PathVariable Long id,
+            @PathVariable String identifier,
+            @AuthenticationPrincipal UserDetails user) {
+        terrainService.removeUserFromWhitelist(id, identifier, user.getUsername());
+        return ResponseEntity.noContent().build();
     }
 }
