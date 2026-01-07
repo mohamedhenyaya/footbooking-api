@@ -50,7 +50,7 @@ public class DataSeeder implements CommandLineRunner {
                 seedTournaments();
                 seedTerrains();
                 seedBankAccounts();
-                seedBookings();
+                // seedBookings(); // Disabled as per user request
                 ensureAssignments();
                 updateSchema();
                 log.info("Data Seeding Completed.");

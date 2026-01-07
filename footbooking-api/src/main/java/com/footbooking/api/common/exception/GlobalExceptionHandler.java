@@ -11,6 +11,7 @@ import java.time.Instant;
 import java.util.Map;
 
 @RestControllerAdvice
+@lombok.extern.slf4j.Slf4j
 public class GlobalExceptionHandler {
 
         @ExceptionHandler(TerrainNotFoundException.class)
@@ -132,8 +133,78 @@ public class GlobalExceptionHandler {
                                                 "message", ex.getMessage()));
         }
 
+        @ExceptionHandler(IllegalStateException.class)
+        public ResponseEntity<?> handleIllegalStateException(IllegalStateException ex) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(
+                                Map.of(
+                                                "timestamp", Instant.now(),
+                                                "status", 400,
+                                                "error", "ILLEGAL_STATE",
+                                                "message", ex.getMessage()));
+        }
+
+        @ExceptionHandler(IllegalArgumentException.class)
+        public ResponseEntity<?> handleIllegalArgumentException(IllegalArgumentException ex) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(
+                                Map.of(
+                                                "timestamp", Instant.now(),
+                                                "status", 400,
+                                                "error", "BAD_REQUEST",
+                                                "message", ex.getMessage()));
+        }
+
+        @ExceptionHandler(org.springframework.web.method.annotation.MethodArgumentTypeMismatchException.class)
+        public ResponseEntity<?> handleMethodArgumentTypeMismatch(
+                        org.springframework.web.method.annotation.MethodArgumentTypeMismatchException ex) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(
+                                Map.of(
+                                                "timestamp", Instant.now(),
+                                                "status", 400,
+                                                "error", "BAD_REQUEST",
+                                                "message",
+                                                String.format("The parameter '%s' of value '%s' could not be converted to type '%s'",
+                                                                ex.getName(), ex.getValue(),
+                                                                ex.getRequiredType().getSimpleName())));
+        }
+
+        @ExceptionHandler(org.springframework.dao.DataIntegrityViolationException.class)
+        public ResponseEntity<?> handleDataIntegrityViolation(
+                        org.springframework.dao.DataIntegrityViolationException ex) {
+                log.error("Data integrity violation: ", ex);
+                return ResponseEntity.status(HttpStatus.CONFLICT).body(
+                                Map.of(
+                                                "timestamp", Instant.now(),
+                                                "status", 409,
+                                                "error", "CONFLICT",
+                                                "message",
+                                                "Database error: " + ex.getMostSpecificCause().getMessage()));
+        }
+
+        @ExceptionHandler(org.springframework.http.converter.HttpMessageNotReadableException.class)
+        public ResponseEntity<?> handleHttpMessageNotReadable(
+                        org.springframework.http.converter.HttpMessageNotReadableException ex) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(
+                                Map.of(
+                                                "timestamp", Instant.now(),
+                                                "status", 400,
+                                                "error", "BAD_REQUEST",
+                                                "message", "Malformed JSON request"));
+        }
+
+        @ExceptionHandler(org.springframework.web.HttpRequestMethodNotSupportedException.class)
+        public ResponseEntity<?> handleHttpRequestMethodNotSupported(
+                        org.springframework.web.HttpRequestMethodNotSupportedException ex) {
+                return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED).body(
+                                Map.of(
+                                                "timestamp", Instant.now(),
+                                                "status", 405,
+                                                "error", "METHOD_NOT_ALLOWED",
+                                                "message", ex.getMessage()));
+        }
+
         @ExceptionHandler(Exception.class)
         public ResponseEntity<?> handleGenericException(Exception ex) {
+                log.error("Unexpected error: ", ex);
                 return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(
                                 Map.of(
                                                 "timestamp", Instant.now(),

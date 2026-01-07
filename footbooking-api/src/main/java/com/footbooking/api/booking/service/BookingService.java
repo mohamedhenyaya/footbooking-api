@@ -23,6 +23,7 @@ import java.util.List;
 public class BookingService {
 
     private final BookingJdbcRepository bookingJdbcRepository;
+    private final com.footbooking.api.booking.repository.BookingRepository bookingRepository;
     private final TerrainRepository terrainRepository;
     private final UserRepository userRepository;
     private final BankAccountRepository bankAccountRepository;
@@ -141,10 +142,38 @@ public class BookingService {
     public List<AdminBookingResponseDto> getIncomingBookings(java.time.LocalDate date,
             String status) {
         String email = SecurityContextHolder.getContext().getAuthentication().getName();
-        var admin = userRepository.findByEmail(email)
+        var user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found"));
 
-        return bookingJdbcRepository.findBookingsByOwner(admin.getId(), date, status);
+        boolean isSuperAdmin = user.getRoles().stream()
+                .anyMatch(r -> r.getName().equals("SUPERADMIN") || r.getName().equals("ROLE_SUPERADMIN"));
+
+        List<com.footbooking.api.booking.model.Booking> bookings;
+
+        // Note: the repository uses BookingRepository (JPA interface), not
+        // BookingJdbcRepository
+        if (isSuperAdmin) {
+            bookings = bookingRepository.findAllbookings(date, status);
+        } else {
+            // For regular admin, find bookings for their terrains
+            bookings = bookingRepository.findByTerrainOwnerId(user.getId(), date, status);
+        }
+
+        // Map to DTO
+        return bookings.stream().map(b -> new AdminBookingResponseDto(
+                b.getId(),
+                b.getDate(),
+                b.getHour(),
+                b.getStatus(),
+                b.getPaymentStatus(),
+                new com.footbooking.api.booking.dto.UserSummaryDto(
+                        b.getUser().getName(),
+                        b.getUser().getEmail(),
+                        b.getUser().getPhone()),
+                new com.footbooking.api.booking.dto.TerrainSummaryDto(
+                        b.getTerrain().getId(),
+                        b.getTerrain().getName())))
+                .toList();
     }
 
     public BookingResponseDto createAdminBooking(BookingRequestDto request) {

@@ -135,7 +135,11 @@ public class BookingRequestService {
         booking.setPaymentStatus("payé");
         booking.setCreatedAt(LocalDateTime.now());
 
-        booking = bookingRepository.save(booking);
+        try {
+            booking = bookingRepository.save(booking);
+        } catch (org.springframework.dao.DataIntegrityViolationException ex) {
+            throw new com.footbooking.api.booking.exception.SlotAlreadyBookedException();
+        }
 
         // Update request
         request.setStatus(BookingRequestStatus.APPROUVEE);
@@ -189,6 +193,7 @@ public class BookingRequestService {
         return toResponseDTO(request);
     }
 
+    @Transactional(readOnly = true)
     public List<BookingRequestResponseDTO> getPendingRequests(Long adminId, Long terrainId) {
         User admin = userRepository.findById(adminId)
                 .orElseThrow(() -> new RuntimeException("Admin user not found"));
@@ -212,6 +217,7 @@ public class BookingRequestService {
                 .collect(Collectors.toList());
     }
 
+    @Transactional(readOnly = true)
     public List<BookingRequestResponseDTO> getMyRequests(Long userId) {
         return bookingRequestRepository.findByUserId(userId).stream()
                 .map(this::toResponseDTO)
@@ -237,6 +243,8 @@ public class BookingRequestService {
                 request.getId(),
                 request.getUser().getId(),
                 request.getUser().getName(),
+                request.getUser().getEmail(),
+                request.getUser().getPhone(),
                 request.getTerrain().getId(),
                 request.getTerrain().getName(),
                 request.getTerrain().getCity(),

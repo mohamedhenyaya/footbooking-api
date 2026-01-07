@@ -186,6 +186,7 @@ public class BookingJdbcRepository {
                         rs.getDate("booking_date").toLocalDate(),
                         rs.getInt("booking_hour"),
                         rs.getString("status"),
+                        "PAYE", // Default for JDBC confirmed bookings
                         new com.footbooking.api.booking.dto.UserSummaryDto(
                                 rs.getString("user_name"),
                                 rs.getString("user_email"),
