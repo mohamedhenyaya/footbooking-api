@@ -4,8 +4,9 @@ import java.time.LocalDate;
 import java.util.List;
 
 public record TerrainAvailabilityResponseDto(
-        Long terrainId,
-        LocalDate date,
-        List<Integer> bookedHours,
-        List<Integer> availableHours
-) {}
+                Long terrainId,
+                LocalDate date,
+                List<Integer> bookedHours,
+                List<Integer> availableHours,
+                List<BookedSlotDto> bookedSlots) {
+}

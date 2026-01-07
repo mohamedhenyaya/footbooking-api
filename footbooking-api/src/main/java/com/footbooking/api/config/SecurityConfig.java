@@ -45,7 +45,24 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.DELETE, "/api/terrains/**").hasAnyRole("ADMIN", "SUPERADMIN")
                         .requestMatchers("/api/rankings/**").permitAll()
                         .requestMatchers("/api/tournaments/**").permitAll()
-                        .requestMatchers("/api/bookings/**").authenticated()
+                        // Booking requests - new workflow
+                        .requestMatchers(HttpMethod.POST, "/api/booking-requests").authenticated()
+                        .requestMatchers(HttpMethod.GET, "/api/booking-requests/my-requests").authenticated()
+                        .requestMatchers(HttpMethod.POST, "/api/booking-requests/*/submit-payment").authenticated()
+                        .requestMatchers(HttpMethod.GET, "/api/booking-requests/pending")
+                        .hasAnyRole("ADMIN", "SUPERADMIN")
+                        .requestMatchers(HttpMethod.POST, "/api/booking-requests/*/approve")
+                        .hasAnyRole("ADMIN", "SUPERADMIN")
+                        .requestMatchers(HttpMethod.POST, "/api/booking-requests/*/reject")
+                        .hasAnyRole("ADMIN", "SUPERADMIN")
+                        // Bookings - restricted to admins only
+                        .requestMatchers(HttpMethod.POST, "/api/bookings").hasAnyRole("ADMIN", "SUPERADMIN")
+                        .requestMatchers(HttpMethod.GET, "/api/bookings/**").authenticated()
+                        .requestMatchers(HttpMethod.DELETE, "/api/bookings/**").authenticated()
+                        // File upload
+                        .requestMatchers(HttpMethod.POST, "/api/upload").authenticated()
+                        .requestMatchers(HttpMethod.GET, "/uploads/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/uploads/**").permitAll()
                         .anyRequest().authenticated())
 
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);

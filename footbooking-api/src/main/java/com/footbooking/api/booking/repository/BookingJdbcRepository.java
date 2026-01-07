@@ -8,20 +8,52 @@ import org.springframework.stereotype.Repository;
 import java.time.LocalDate;
 import java.util.List;
 
+import com.footbooking.api.booking.dto.RawBookingSlotDto;
+import java.time.LocalDateTime;
+
 @Repository
 @RequiredArgsConstructor
 public class BookingJdbcRepository {
 
     private final JdbcTemplate jdbcTemplate;
 
+    // ... existing findBookedHours ...
+
+    public List<RawBookingSlotDto> findBookedSlotsDetails(Long terrainId, LocalDate date) {
+        String sql = """
+                    SELECT booking_hour, 'CONFIRMED' as status, created_at
+                    FROM bookings
+                    WHERE terrain_id = ? AND booking_date = ?
+                    UNION
+                    SELECT booking_hour, status, created_at
+                    FROM booking_requests
+                    WHERE terrain_id = ? AND booking_date = ?
+                    AND upper(status) IN ('EN_ATTENTE_PAIEMENT', 'EN_ATTENTE_VALIDATION_ADMIN')
+                    ORDER BY booking_hour
+                """;
+
+        return jdbcTemplate.query(
+                sql,
+                (rs, rowNum) -> new RawBookingSlotDto(
+                        rs.getInt("booking_hour"),
+                        rs.getString("status"),
+                        rs.getTimestamp("created_at").toLocalDateTime()),
+                terrainId, date, terrainId, date);
+    }
+
     public List<Integer> findBookedHours(Long terrainId, LocalDate date) {
         String sql = """
                     SELECT booking_hour
                     FROM bookings
                     WHERE terrain_id = ? AND booking_date = ?
+                    UNION
+                    SELECT booking_hour
+                    FROM booking_requests
+                    WHERE terrain_id = ? AND booking_date = ?
+                    AND upper(status) IN ('EN_ATTENTE_PAIEMENT', 'EN_ATTENTE_VALIDATION_ADMIN')
                     ORDER BY booking_hour
                 """;
-        return jdbcTemplate.queryForList(sql, Integer.class, terrainId, date);
+        return jdbcTemplate.queryForList(sql, Integer.class, terrainId, date, terrainId, date);
     }
 
     public Long createBooking(Long userId, Long terrainId, LocalDate date, int hour, String status) {

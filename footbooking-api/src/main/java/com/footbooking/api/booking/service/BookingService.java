@@ -6,6 +6,7 @@ import com.footbooking.api.booking.dto.BookingRequestDto;
 import com.footbooking.api.booking.dto.BookingResponseDto;
 import com.footbooking.api.booking.exception.SlotAlreadyBookedException;
 import com.footbooking.api.booking.repository.BookingJdbcRepository;
+import com.footbooking.api.payment.repository.BankAccountRepository;
 import com.footbooking.api.terrain.exception.TerrainNotFoundException;
 import com.footbooking.api.terrain.repository.TerrainRepository;
 import lombok.RequiredArgsConstructor;
@@ -24,6 +25,7 @@ public class BookingService {
     private final BookingJdbcRepository bookingJdbcRepository;
     private final TerrainRepository terrainRepository;
     private final UserRepository userRepository;
+    private final BankAccountRepository bankAccountRepository;
 
     public BookingResponseDto createBooking(BookingRequestDto request) {
 
@@ -47,11 +49,29 @@ public class BookingService {
                     request.hour(),
                     status);
 
+            // Get bank account information if available
+            com.footbooking.api.payment.dto.BankAccountDTO bankAccount = null;
+            var bankAccountOpt = bankAccountRepository.findByTerrainId(request.terrainId());
+
+            if (bankAccountOpt.isPresent()) {
+                var ba = bankAccountOpt.get();
+                bankAccount = new com.footbooking.api.payment.dto.BankAccountDTO(
+                        ba.getId(),
+                        ba.getAccountHolderName(),
+                        ba.getBankName(),
+                        ba.getAccountNumber(),
+                        ba.getRib(),
+                        ba.getAdditionalInfo());
+            }
+
             return new BookingResponseDto(
                     bookingId,
                     request.terrainId(),
+                    terrain.getName(),
+                    terrain.getCity(),
                     request.date(),
-                    request.hour());
+                    request.hour(),
+                    bankAccount);
 
         } catch (DuplicateKeyException ex) {
             throw new SlotAlreadyBookedException();

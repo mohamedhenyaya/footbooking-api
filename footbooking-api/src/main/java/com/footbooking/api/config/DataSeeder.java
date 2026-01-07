@@ -38,6 +38,7 @@ public class DataSeeder implements CommandLineRunner {
         private final BookingJdbcRepository bookingJdbcRepository;
         private final PasswordEncoder passwordEncoder;
         private final org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
+        private final com.footbooking.api.payment.repository.BankAccountRepository bankAccountRepository;
 
         private final Random random = new Random();
 
@@ -48,6 +49,7 @@ public class DataSeeder implements CommandLineRunner {
                 seedUsers();
                 seedTournaments();
                 seedTerrains();
+                seedBankAccounts();
                 seedBookings();
                 ensureAssignments();
                 updateSchema();
@@ -238,6 +240,75 @@ public class DataSeeder implements CommandLineRunner {
                                 .build();
         }
 
+        private void seedBankAccounts() {
+                if (bankAccountRepository.count() > 0) {
+                        log.info("Bank accounts already seeded.");
+                        return;
+                }
+
+                List<Terrain> terrains = terrainRepository.findAll();
+                if (terrains.isEmpty()) {
+                        log.info("No terrains found, skipping bank account seeding.");
+                        return;
+                }
+
+                // French bank names
+                String[] bankNames = {
+                                "BNP Paribas", "Crédit Agricole", "Société Générale", "Banque Populaire",
+                                "Caisse d'Épargne", "LCL", "Crédit Mutuel", "La Banque Postale",
+                                "CIC", "Boursorama Banque"
+                };
+
+                // Sample account holder names
+                String[] holderNames = {
+                                "Jean Dupont", "Marie Martin", "Pierre Bernard", "Sophie Dubois",
+                                "Luc Moreau", "Claire Laurent", "Antoine Simon", "Isabelle Michel",
+                                "François Lefebvre", "Nathalie Leroy"
+                };
+
+                int accountsCreated = 0;
+                for (int i = 0; i < terrains.size(); i++) {
+                        Terrain terrain = terrains.get(i);
+
+                        // Generate realistic French bank account details
+                        String bankName = bankNames[i % bankNames.length];
+                        String holderName = holderNames[i % holderNames.length];
+
+                        // Generate French account number (11 digits)
+                        String accountNumber = String.format("%011d", 10000000000L + random.nextInt(90000000));
+
+                        // Generate French RIB (27 characters: FR + 2 check digits + 23 digits)
+                        String bankCode = String.format("%05d", 10000 + random.nextInt(90000));
+                        String branchCode = String.format("%05d", 10000 + random.nextInt(90000));
+                        String accountNum = String.format("%011d", 10000000000L + random.nextInt(90000000));
+                        String key = String.format("%02d", random.nextInt(97));
+                        String rib = String.format("FR76 %s %s %s %s", bankCode, branchCode, accountNum, key);
+
+                        // Additional info variations
+                        String[] additionalInfos = {
+                                        "Paiement par virement uniquement",
+                                        "Virement bancaire ou espèces acceptés",
+                                        "Merci d'indiquer le numéro de réservation dans le libellé",
+                                        "Paiement à effectuer 24h avant la réservation",
+                                        "Virement SEPA uniquement",
+                                        null // Some terrains without additional info
+                        };
+
+                        com.footbooking.api.payment.model.BankAccount bankAccount = new com.footbooking.api.payment.model.BankAccount();
+                        bankAccount.setTerrainId(terrain.getId());
+                        bankAccount.setAccountHolderName(holderName);
+                        bankAccount.setBankName(bankName);
+                        bankAccount.setAccountNumber(accountNumber);
+                        bankAccount.setRib(rib);
+                        bankAccount.setAdditionalInfo(additionalInfos[i % additionalInfos.length]);
+
+                        bankAccountRepository.save(bankAccount);
+                        accountsCreated++;
+                }
+
+                log.info("Seeded {} bank accounts for terrains.", accountsCreated);
+        }
+
         private void seedBookings() {
                 // Since we don't have a count method easily on JdbcRepository, we'll try to
                 // insert anyway
@@ -320,8 +391,37 @@ public class DataSeeder implements CommandLineRunner {
                         // Ensure status column exists
                         jdbcTemplate.execute(
                                         "ALTER TABLE bookings ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'confirmée'");
+                        log.info("Ensured status column exists in bookings table");
                 } catch (Exception e) {
-                        log.warn("Could not update schema (ensure status column): {}", e.getMessage());
+                        log.warn("Could not add status column: {}", e.getMessage());
+                }
+
+                try {
+                        // Ensure payment_status column exists
+                        jdbcTemplate.execute(
+                                        "ALTER TABLE bookings ADD COLUMN IF NOT EXISTS payment_status VARCHAR(50) DEFAULT 'non_payé'");
+                        log.info("Ensured payment_status column exists in bookings table");
+                } catch (Exception e) {
+                        log.warn("Could not add payment_status column: {}", e.getMessage());
+                }
+
+                try {
+                        // Drop existing constraint if it exists
+                        jdbcTemplate.execute(
+                                        "ALTER TABLE bookings DROP CONSTRAINT IF EXISTS check_payment_status");
+                        log.info("Dropped old payment_status constraint");
+                } catch (Exception e) {
+                        log.warn("Could not drop old constraint: {}", e.getMessage());
+                }
+
+                try {
+                        // Add updated constraint with new status
+                        jdbcTemplate.execute(
+                                        "ALTER TABLE bookings ADD CONSTRAINT check_payment_status " +
+                                                        "CHECK (payment_status IN ('payé', 'non_payé', 'en_attente_validation'))");
+                        log.info("Added updated payment_status constraint");
+                } catch (Exception e) {
+                        log.warn("Could not add payment_status constraint: {}", e.getMessage());
                 }
         }
 }
