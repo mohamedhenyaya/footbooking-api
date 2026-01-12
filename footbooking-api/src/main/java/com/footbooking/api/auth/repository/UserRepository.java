@@ -12,6 +12,9 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     List<User> findAllByOrderByScoreDesc();
 
+    @org.springframework.data.jpa.repository.Query("SELECT u FROM User u WHERE NOT EXISTS (SELECT r FROM u.roles r WHERE r.name IN ('ADMIN', 'SUPERADMIN')) ORDER BY u.score DESC")
+    List<User> findAllPlayersOrderByScoreDesc();
+
     Long countByScoreGreaterThan(Integer score);
 
     boolean existsByEmail(String email);

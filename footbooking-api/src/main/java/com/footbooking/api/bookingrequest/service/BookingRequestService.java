@@ -149,6 +149,11 @@ public class BookingRequestService {
 
         request = bookingRequestRepository.save(request);
 
+        // Increment user score
+        User user = request.getUser();
+        user.setScore(user.getScore() + 1);
+        userRepository.save(user);
+
         log.info("Booking request approved: ID={}, Booking created: ID={}", requestId, booking.getId());
 
         // Notify user

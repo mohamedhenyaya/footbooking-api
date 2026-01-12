@@ -81,6 +81,8 @@ public class BookingJdbcRepository {
                     ORDER BY b.id DESC
                 """;
 
+        // System.out.println("DEBUG: findBookingsByUserId called with userId: " +
+        // userId);
         return jdbcTemplate.query(sql, (rs, rowNum) -> new BookingResponseDto(
                 rs.getLong("id"),
                 rs.getLong("terrain_id"),
@@ -195,5 +197,15 @@ public class BookingJdbcRepository {
                                 rs.getLong("terrain_id"),
                                 rs.getString("terrain_name"))),
                 params.toArray());
+    }
+
+    public void deleteBookingsByUserIds(List<Long> userIds) {
+        if (userIds.isEmpty()) {
+            return;
+        }
+        String sql = "DELETE FROM bookings WHERE user_id IN (" +
+                String.join(",", java.util.Collections.nCopies(userIds.size(), "?")) +
+                ")";
+        jdbcTemplate.update(sql, userIds.toArray());
     }
 }

@@ -65,6 +65,10 @@ public class BookingService {
                         ba.getAdditionalInfo());
             }
 
+            // Increment user score
+            user.setScore(user.getScore() + 1);
+            userRepository.save(user);
+
             return new BookingResponseDto(
                     bookingId,
                     request.terrainId(),
@@ -81,10 +85,13 @@ public class BookingService {
 
     public List<BookingResponseDto> getMyBookings() {
         String email = SecurityContextHolder.getContext().getAuthentication().getName();
+        // System.out.println("DEBUG: getMyBookings called for email: " + email);
 
         Long userId = userRepository.findByEmail(email)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found: " + email))
                 .getId();
+
+        // System.out.println("DEBUG: Fetching bookings for user ID: " + userId);
 
         return bookingJdbcRepository.findBookingsByUserId(userId);
     }

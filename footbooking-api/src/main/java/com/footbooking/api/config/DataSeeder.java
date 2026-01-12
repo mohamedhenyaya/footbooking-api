@@ -5,6 +5,7 @@ import com.footbooking.api.auth.repository.RoleRepository;
 import com.footbooking.api.auth.model.User;
 import com.footbooking.api.auth.repository.UserRepository;
 import com.footbooking.api.booking.repository.BookingJdbcRepository;
+import com.footbooking.api.bookingrequest.repository.BookingRequestRepository;
 import com.footbooking.api.terrain.model.Terrain;
 import com.footbooking.api.terrain.repository.TerrainRepository;
 import com.footbooking.api.tournament.model.Tournament;
@@ -36,6 +37,7 @@ public class DataSeeder implements CommandLineRunner {
         private final TournamentRepository tournamentRepository;
         private final TerrainRepository terrainRepository;
         private final BookingJdbcRepository bookingJdbcRepository;
+        private final BookingRequestRepository bookingRequestRepository;
         private final PasswordEncoder passwordEncoder;
         private final org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
         private final com.footbooking.api.payment.repository.BankAccountRepository bankAccountRepository;
@@ -104,33 +106,40 @@ public class DataSeeder implements CommandLineRunner {
                         log.info("Seeded superadmin user: superadmin@fb.com");
                 }
 
-                if (userRepository.count() >= 50) {
-                        log.info("Users already seeded (count >= 50).");
-                        return;
-                }
+                // Remove extra users (cleanup)
+                List<User> allUsers = userRepository.findAll();
+                List<User> usersToDelete = new ArrayList<>();
 
-                String defaultPass = passwordEncoder.encode("password");
+                Set<String> keptEmails = Set.of("admin@fb.com", "superadmin@fb.com", "test@fb.com");
+                String keptName = "Joueur 42302133";
 
-                String[] names = {
-                                "Alice", "Bob", "Charlie", "David", "Eva", "Frank", "Grace", "Hugo", "Iris", "Jack",
-                                "Karim", "Liam", "Mona", "Nina", "Oscar", "Paul", "Quentin", "Rachel", "Sam", "Tina",
-                                "Ugo", "Victor", "Wendy", "Xavier", "Yasmine", "Zack",
-                                "Adrien", "Bianca", "Camille", "Dorian", "Elise", "Fabien", "Gabriel", "Helene",
-                                "Ismael", "Juliette", "Kevin", "Lea", "Mathieu", "Nora", "Olivier", "Pierre",
-                                "Raphael", "Romane", "Sophie", "Thomas", "Ulysse", "Valerie", "William", "Xenia"
-                };
+                for (User user : allUsers) {
+                        boolean isAdminOrSuper = user.getRoles().stream()
+                                        .anyMatch(r -> r.getName().equals("ADMIN") || r.getName().equals("SUPERADMIN"));
 
-                List<User> usersToSave = new ArrayList<>();
-                for (String name : names) {
-                        String email = name.toLowerCase() + "@example.com";
-                        if (!userRepository.existsByEmail(email)) {
-                                usersToSave.add(createUser(name, email, defaultPass, userRole));
+                        boolean isKeptUser = keptEmails.contains(user.getEmail()) || keptName.equals(user.getName());
+
+                        if (!isAdminOrSuper && !isKeptUser) {
+                                usersToDelete.add(user);
                         }
                 }
 
-                if (!usersToSave.isEmpty()) {
-                        userRepository.saveAll(usersToSave);
-                        log.info("Seeded {} new users.", usersToSave.size());
+                if (!usersToDelete.isEmpty()) {
+                        List<Long> userIds = usersToDelete.stream().map(User::getId).toList();
+                        log.info("Cleaning up data for {} users...", userIds.size());
+
+                        // Delete associated bookings and requests first
+                        bookingJdbcRepository.deleteBookingsByUserIds(userIds);
+                        // Delete booking requests (assuming JPA method exists or we use check)
+                        // If repository method is void deleteByUserIdIn(List<Long> userIds);
+                        try {
+                                bookingRequestRepository.deleteByUserIdIn(userIds);
+                        } catch (Exception e) {
+                                log.warn("Error deleting booking requests: {}", e.getMessage());
+                        }
+
+                        userRepository.deleteAll(usersToDelete);
+                        log.info("Deleted {} extra users.", usersToDelete.size());
                 }
         }
 
@@ -151,61 +160,9 @@ public class DataSeeder implements CommandLineRunner {
         }
 
         private void seedTournaments() {
-                if (tournamentRepository.count() >= 20) {
-                        log.info("Tournaments already seeded (count >= 20).");
-                        return;
-                }
-
-                List<Tournament> tournaments = new ArrayList<>();
-
-                // Ensure we have some specifically requested or named ones
-                tournaments.add(createTournament("Tournoi Open", "Foot", "A", 500.0, 5000.0, 16));
-                tournaments.add(createTournament("Summer Cup", "Foot", "B", 1000.0, 10000.0, 8));
-                tournaments.add(createTournament("Champions League", "Foot", "C", 1500.0, 25000.0, 32));
-                tournaments.add(createTournament("Winter Cup", "Foot", "D", 800.0, 8000.0, 12));
-                tournaments.add(createTournament("Pro League", "Foot", "E", 2000.0, 50000.0, 24));
-
-                // Generate more
-                String[] events = { "Cup", "League", "Challenge", "Trophy", "Series" };
-                String[] adjectives = { "Super", "Mega", "Ultra", "Elite", "Premier", "Amateur", "Youth", "Senior" };
-
-                for (int i = 0; i < 15; i++) {
-                        String name = adjectives[random.nextInt(adjectives.length)] + " "
-                                        + events[random.nextInt(events.length)] + " " + (2025 + i);
-                        tournaments.add(createTournament(name, "Foot", "Terrain " + (char) ('A' + random.nextInt(26)),
-                                        100.0 + random.nextInt(900), 1000.0 + random.nextInt(9000),
-                                        4 + random.nextInt(28)));
-                }
-
-                tournamentRepository.saveAll(tournaments);
-                log.info("Seeded {} tournaments.", tournaments.size());
-        }
-
-        private Tournament createTournament(String name, String type, String terrain, Double cost, Double prize,
-                        Integer max) {
-                LocalDate start = LocalDate.now().plusDays(random.nextInt(90));
-                LocalDate end = start.plusDays(2 + random.nextInt(5));
-
-                String[] organizers = { "FootPro Events", "SportCity", "Urban League", "Elite Sports",
-                                "Champions Org" };
-                String[] statuses = { "inscription_ouverte", "en_cours", "terminé" };
-
-                return Tournament.builder()
-                                .name(name)
-                                .type(type)
-                                .terrain(terrain)
-                                .cost(cost)
-                                .prize(prize)
-                                .startDate(start)
-                                .endDate(end)
-                                .maxTeams(max)
-                                .remainingTeams(random.nextInt(max + 1))
-                                .description("Tournoi de football compétitif avec des équipes de haut niveau. Inscription ouverte à tous les niveaux.")
-                                .rules("Règles FIFA standard. 2x 30 minutes. Pénalités en cas d'égalité.")
-                                .organizer(organizers[random.nextInt(organizers.length)])
-                                .status(statuses[random.nextInt(statuses.length)])
-                                .imageUrl("https://picsum.photos/seed/" + name.hashCode() + "/800/600")
-                                .build();
+                log.info("Clearing all tournaments...");
+                tournamentRepository.deleteAll();
+                log.info("All tournaments deleted.");
         }
 
         private void seedTerrains() {

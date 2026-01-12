@@ -14,7 +14,7 @@ public class RankingService {
     private final UserRepository userRepository;
 
     public List<UserRankingDTO> getRankings() {
-        return userRepository.findAllByOrderByScoreDesc().stream()
+        return userRepository.findAllPlayersOrderByScoreDesc().stream()
                 .map(user -> UserRankingDTO.builder()
                         .id(user.getId())
                         .name(user.getName())

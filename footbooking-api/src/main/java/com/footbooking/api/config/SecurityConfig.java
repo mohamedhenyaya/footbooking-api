@@ -47,7 +47,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/tournaments/**").permitAll()
                         // Booking requests - new workflow
                         .requestMatchers(HttpMethod.POST, "/api/booking-requests").authenticated()
-                        .requestMatchers(HttpMethod.GET, "/api/booking-requests/my-requests").authenticated()
+                        .requestMatchers(HttpMethod.GET, "/api/booking-requests/me").authenticated()
                         .requestMatchers(HttpMethod.POST, "/api/booking-requests/*/submit-payment").authenticated()
                         .requestMatchers(HttpMethod.GET, "/api/booking-requests/pending")
                         .hasAnyRole("ADMIN", "SUPERADMIN")

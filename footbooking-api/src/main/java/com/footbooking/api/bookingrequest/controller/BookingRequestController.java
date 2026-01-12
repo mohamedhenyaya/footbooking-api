@@ -67,7 +67,7 @@ public class BookingRequestController {
         return ResponseEntity.ok(bookingRequestService.getPendingRequests(user.getId(), terrainId));
     }
 
-    @GetMapping("/my-requests")
+    @GetMapping("/me")
     public ResponseEntity<List<BookingRequestResponseDTO>> getMyRequests(
             @AuthenticationPrincipal UserDetails userDetails) {
         User user = getUser(userDetails);
