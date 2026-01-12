@@ -208,4 +208,15 @@ public class BookingJdbcRepository {
                 ")";
         jdbcTemplate.update(sql, userIds.toArray());
     }
+
+    public void deleteRequestsForBookingsOfUsers(List<Long> userIds) {
+        if (userIds.isEmpty()) {
+            return;
+        }
+        // Delete requests that link to bookings owned by these users
+        String sql = "DELETE FROM booking_requests WHERE booking_id IN (SELECT id FROM bookings WHERE user_id IN (" +
+                String.join(",", java.util.Collections.nCopies(userIds.size(), "?")) +
+                "))";
+        jdbcTemplate.update(sql, userIds.toArray());
+    }
 }

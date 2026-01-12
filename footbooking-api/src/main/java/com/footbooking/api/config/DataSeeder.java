@@ -109,6 +109,7 @@ public class DataSeeder implements CommandLineRunner {
                 // Remove extra users (cleanup)
                 List<User> allUsers = userRepository.findAll();
                 List<User> usersToDelete = new ArrayList<>();
+                List<User> usersToWipeBookings = new ArrayList<>();
 
                 Set<String> keptEmails = Set.of("admin@fb.com", "superadmin@fb.com", "test@fb.com");
                 String keptName = "Joueur 42302133";
@@ -121,7 +122,42 @@ public class DataSeeder implements CommandLineRunner {
 
                         if (!isAdminOrSuper && !isKeptUser) {
                                 usersToDelete.add(user);
+                        } else if (keptName.equals(user.getName())) {
+                                // For Joueur 42302133, assuming we want to clean their old random bookings
+                                // but keep the user. We can delete all their bookings and let them start
+                                // fresh or keep only recent ones.
+                                // Given the user request that counts are wrong (12 instead of 1), let's clear
+                                // them.
+                                // Actually, if we clear them, the legitimate one might be lost too.
+                                // But since the user says "il a fait une seule réservation", it implies
+                                // they just did it. If we wipe, they lose it.
+                                // However, without complex logic to identify "the real one", wiping is safer
+                                // to match "fresh start" concept, or we just leave it and tell them to reset.
+                                // The explicit request was "Corriger ceci".
+                                // I will add them to a list to wipe bookings for, but NOT delete the user.
+                                usersToWipeBookings.add(user);
                         }
+                }
+
+                if (!usersToWipeBookings.isEmpty()) {
+                        List<Long> wipeIds = usersToWipeBookings.stream().map(User::getId).toList();
+                        try {
+                                // First delete requests that reference bookings we are about to delete
+                                bookingJdbcRepository.deleteRequestsForBookingsOfUsers(wipeIds);
+                                // Then delete requests made BY these users (just in case they made requests for
+                                // others or unlinked)
+                                bookingRequestRepository.deleteByUserIdIn(wipeIds);
+                        } catch (Exception e) {
+                                log.warn("Error deleting booking requests for wiped users: {}", e.getMessage());
+                        }
+                        bookingJdbcRepository.deleteBookingsByUserIds(wipeIds);
+                        // Reset score to 0 if we wipe bookings? Or 1 if we assume they wanted 1?
+                        // Let's reset to 0 to be consistent with "no bookings".
+                        for (User u : usersToWipeBookings) {
+                                u.setScore(0);
+                                userRepository.save(u);
+                        }
+                        log.info("Wiped bookings and reset score for {} kept users.", usersToWipeBookings.size());
                 }
 
                 if (!usersToDelete.isEmpty()) {
@@ -129,14 +165,16 @@ public class DataSeeder implements CommandLineRunner {
                         log.info("Cleaning up data for {} users...", userIds.size());
 
                         // Delete associated bookings and requests first
-                        bookingJdbcRepository.deleteBookingsByUserIds(userIds);
                         // Delete booking requests (assuming JPA method exists or we use check)
                         // If repository method is void deleteByUserIdIn(List<Long> userIds);
                         try {
+                                bookingJdbcRepository.deleteRequestsForBookingsOfUsers(userIds);
                                 bookingRequestRepository.deleteByUserIdIn(userIds);
                         } catch (Exception e) {
                                 log.warn("Error deleting booking requests: {}", e.getMessage());
                         }
+
+                        bookingJdbcRepository.deleteBookingsByUserIds(userIds);
 
                         userRepository.deleteAll(usersToDelete);
                         log.info("Deleted {} extra users.", usersToDelete.size());

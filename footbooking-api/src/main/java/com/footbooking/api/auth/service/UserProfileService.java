@@ -51,8 +51,8 @@ public class UserProfileService {
     }
 
     private Integer calculateUserRank(Long userId, Integer score) {
-        // Count how many users have a higher score
-        Long higherScoreCount = userRepository.countByScoreGreaterThan(score);
+        // Count how many users have a higher score, excluding admins
+        Long higherScoreCount = userRepository.countPlayersByScoreGreaterThan(score);
         return higherScoreCount.intValue() + 1;
     }
 }
