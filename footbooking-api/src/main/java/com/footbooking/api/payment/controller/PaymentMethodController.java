@@ -20,7 +20,8 @@ public class PaymentMethodController {
     private final PaymentMethodService paymentMethodService;
 
     @GetMapping
-    public List<PaymentMethodDTO> getPaymentMethods(@AuthenticationPrincipal UserDetails user) {
+    public List<PaymentMethodDTO> getPaymentMethods(
+            @AuthenticationPrincipal UserDetails user) {
         return paymentMethodService.getUserPaymentMethods(user.getUsername());
     }
 

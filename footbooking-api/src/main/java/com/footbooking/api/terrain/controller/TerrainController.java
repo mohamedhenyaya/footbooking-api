@@ -27,7 +27,8 @@ public class TerrainController {
     private final TerrainAvailabilityService terrainAvailabilityService;
 
     @GetMapping
-    public List<TerrainResponseDto> getAllTerrains(@AuthenticationPrincipal UserDetails user) {
+    public List<TerrainResponseDto> getAllTerrains(
+            @AuthenticationPrincipal UserDetails user) {
         if (user != null) {
             boolean isAdmin = user.getAuthorities().stream()
                     .anyMatch(a -> a.getAuthority().equals("ADMIN") || a.getAuthority().equals("ROLE_ADMIN"));

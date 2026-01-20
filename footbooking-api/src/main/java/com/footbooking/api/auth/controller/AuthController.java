@@ -31,6 +31,7 @@ public class AuthController {
         }
         return authService.getMe(user.getUsername());
     }
+
     // Dans AuthController.java
     @PostMapping("/whatsapp/request-otp")
     public ResponseEntity<?> requestOtp(@RequestBody Map<String, String> payload) {
