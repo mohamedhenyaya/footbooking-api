@@ -25,22 +25,4 @@ public class BookingController {
         return bookingService.createBooking(request);
     }
 
-    @DeleteMapping("/{id}")
-    public org.springframework.http.ResponseEntity<?> cancelBooking(@PathVariable Long id) {
-        bookingService.cancelBooking(id);
-        return org.springframework.http.ResponseEntity
-                .ok(java.util.Map.of("message", "Booking cancelled successfully"));
-    }
-
-    @PutMapping("/{id}/accept")
-    public ResponseEntity<?> acceptBooking(@PathVariable Long id) {
-        bookingService.adminAcceptBooking(id);
-        return ResponseEntity.ok(java.util.Map.of("message", "Booking accepted successfully"));
-    }
-
-    @PutMapping("/{id}/cancel")
-    public ResponseEntity<?> adminCancelBooking(@PathVariable Long id) {
-        bookingService.adminCancelBooking(id);
-        return ResponseEntity.ok(java.util.Map.of("message", "Booking cancelled by admin successfully"));
-    }
 }

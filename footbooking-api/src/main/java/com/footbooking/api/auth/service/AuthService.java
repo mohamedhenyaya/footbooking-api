@@ -40,31 +40,35 @@ public class AuthService {
     /**
      * Génère et envoie un code OTP par WhatsApp via le tunnel Cloudflare
      */
+    // Dans AuthService.java, modifiez l'envoi :
     public void sendWhatsAppOtp(String phoneNumber) {
         String otp = String.format("%06d", new Random().nextInt(999999));
+        // On garde le phoneNumber original (avec +) dans la map pour la validation future
         otpStorage.put(phoneNumber, new OtpData(otp));
 
         RestTemplate restTemplate = new RestTemplate();
         Map<String, Object> body = new HashMap<>();
 
+        // 1. Extraire uniquement les chiffres (enlève le + et les espaces)
         String cleanNumber = phoneNumber.replaceAll("\\D", "");
+
+        // 2. Si l'utilisateur a saisi seulement 8 chiffres, on ajoute 222
         if (cleanNumber.length() == 8) {
             cleanNumber = "222" + cleanNumber;
         }
 
+        // On envoie le numéro technique à Node.js (ex: 22246XXXXXX)
         body.put("number", cleanNumber);
-        body.put("message", "Votre code de vérification FootBooking est : " + otp);
+        body.put("message", "Votre code FootBooking : " + otp);
 
         try {
-            // Utilise l'URL dynamique au lieu de localhost:8082
             restTemplate.postForEntity(whatsappServiceUrl + "/send-otp", body, String.class);
-            System.out.println("✅ OTP envoyé via tunnel à : " + cleanNumber);
+            System.out.println("✅ Requête envoyée au serveur Node pour : " + cleanNumber);
         } catch (Exception e) {
-            System.out.println("❌ Erreur Tunnel Node.js: " + e.getMessage());
-            System.out.println("👉 CODE OTP (Backup Console): " + otp);
+            System.err.println("❌ Erreur WhatsApp Service : " + e.getMessage());
+            System.out.println("👉 CODE OTP (Console): " + otp);
         }
     }
-
     /**
      * Valide l'inscription finale
      */

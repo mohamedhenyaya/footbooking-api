@@ -7,6 +7,5 @@ public record TerrainAvailabilityResponseDto(
                 Long terrainId,
                 LocalDate date,
                 List<Integer> bookedHours,
-                List<Integer> availableHours,
-                List<BookedSlotDto> bookedSlots) {
+                List<Integer> availableHours) {
 }

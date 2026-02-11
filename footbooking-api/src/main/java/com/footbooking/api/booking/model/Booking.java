@@ -35,11 +35,8 @@ public class Booking {
     @Column(name = "booking_hour", nullable = false)
     private Integer hour;
 
-    @Column(nullable = false)
-    private String status;
-
-    @Column(name = "payment_status")
-    private String paymentStatus;
+    @Column(name = "moov_money_number")
+    private String moovMoneyNumber;
 
     @Builder.Default
     @Column(name = "created_at", nullable = false)

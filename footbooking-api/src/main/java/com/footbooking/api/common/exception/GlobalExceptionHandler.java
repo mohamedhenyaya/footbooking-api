@@ -66,28 +66,6 @@ public class GlobalExceptionHandler {
                                                 "message", ex.getMessage()));
         }
 
-        @ExceptionHandler(com.footbooking.api.storage.exception.FileStorageException.class)
-        public ResponseEntity<?> handleFileStorageException(
-                        com.footbooking.api.storage.exception.FileStorageException ex) {
-                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(
-                                Map.of(
-                                                "timestamp", Instant.now(),
-                                                "status", 500,
-                                                "error", "FILE_STORAGE_ERROR",
-                                                "message", ex.getMessage()));
-        }
-
-        @ExceptionHandler(com.footbooking.api.storage.exception.InvalidFileException.class)
-        public ResponseEntity<?> handleInvalidFileException(
-                        com.footbooking.api.storage.exception.InvalidFileException ex) {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(
-                                Map.of(
-                                                "timestamp", Instant.now(),
-                                                "status", 400,
-                                                "error", "INVALID_FILE",
-                                                "message", ex.getMessage()));
-        }
-
         @ExceptionHandler(org.springframework.web.multipart.support.MissingServletRequestPartException.class)
         public ResponseEntity<?> handleMissingServletRequestPart(
                         org.springframework.web.multipart.support.MissingServletRequestPartException ex) {
@@ -109,28 +87,6 @@ public class GlobalExceptionHandler {
                                                 "status", 400,
                                                 "error", "FILE_TOO_LARGE",
                                                 "message", "Le fichier dépasse la taille maximale autorisée de 5MB"));
-        }
-
-        @ExceptionHandler(com.footbooking.api.bookingrequest.exception.BookingRequestNotFoundException.class)
-        public ResponseEntity<?> handleBookingRequestNotFound(
-                        com.footbooking.api.bookingrequest.exception.BookingRequestNotFoundException ex) {
-                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(
-                                Map.of(
-                                                "timestamp", Instant.now(),
-                                                "status", 404,
-                                                "error", "BOOKING_REQUEST_NOT_FOUND",
-                                                "message", ex.getMessage()));
-        }
-
-        @ExceptionHandler(com.footbooking.api.bookingrequest.exception.BookingRequestExpiredException.class)
-        public ResponseEntity<?> handleBookingRequestExpired(
-                        com.footbooking.api.bookingrequest.exception.BookingRequestExpiredException ex) {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(
-                                Map.of(
-                                                "timestamp", Instant.now(),
-                                                "status", 400,
-                                                "error", "BOOKING_REQUEST_EXPIRED",
-                                                "message", ex.getMessage()));
         }
 
         @ExceptionHandler(IllegalStateException.class)

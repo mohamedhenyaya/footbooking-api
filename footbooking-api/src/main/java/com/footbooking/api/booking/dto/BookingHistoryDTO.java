@@ -11,9 +11,7 @@ public record BookingHistoryDTO(
         String city,
         LocalDate date,
         int hour,
-        String status,
         BigDecimal totalPrice,
-        String paymentStatus,
         LocalDateTime cancellationDeadline,
         LocalDateTime createdAt) {
 }

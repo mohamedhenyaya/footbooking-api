@@ -29,14 +29,8 @@ public class Terrain {
     @Column(name = "price_per_hour", nullable = false)
     private BigDecimal pricePerHour;
 
-    @Column(nullable = false)
-    private boolean indoor;
-
     @Column(columnDefinition = "TEXT")
     private String description;
-
-    @Column(columnDefinition = "TEXT")
-    private String amenities; // JSON array of amenities
 
     private String surface; // gazon, synthétique, etc.
 
@@ -51,8 +45,4 @@ public class Terrain {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "owner_id")
     private User owner;
-
-    @ManyToMany
-    @JoinTable(name = "terrain_whitelist", joinColumns = @JoinColumn(name = "terrain_id"), inverseJoinColumns = @JoinColumn(name = "user_id"))
-    private java.util.Set<User> whitelist = new java.util.HashSet<>();
 }

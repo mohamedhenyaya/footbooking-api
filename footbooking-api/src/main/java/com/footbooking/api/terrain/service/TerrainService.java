@@ -4,6 +4,8 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.footbooking.api.auth.repository.UserRepository;
 import com.footbooking.api.booking.repository.BookingJdbcRepository;
+import com.footbooking.api.payment.repository.BankAccountRepository;
+import com.footbooking.api.terrain.dto.BankAccountSummaryDto;
 import com.footbooking.api.terrain.dto.TerrainDetailDTO;
 import com.footbooking.api.terrain.dto.TerrainResponseDto;
 import com.footbooking.api.terrain.dto.TerrainReviewDTO;
@@ -35,6 +37,7 @@ public class TerrainService {
         private final TerrainImageRepository terrainImageRepository;
         private final TerrainReviewRepository terrainReviewRepository;
         private final UserRepository userRepository;
+        private final BankAccountRepository bankAccountRepository;
         private final ObjectMapper objectMapper = new ObjectMapper();
 
         public List<TerrainResponseDto> getAllTerrains() {
@@ -45,17 +48,23 @@ public class TerrainService {
         }
 
         private TerrainResponseDto toDto(Terrain terrain) {
+                List<BankAccountSummaryDto> bankAccounts = bankAccountRepository.findByTerrainId(terrain.getId())
+                        .stream()
+                        .map(acc -> new BankAccountSummaryDto(acc.getBankName(), acc.getAccountNumber()))
+                        .toList();
+
                 return new TerrainResponseDto(
-                                terrain.getId(),
-                                terrain.getName(),
-                                terrain.getCity(),
-                                terrain.getPricePerHour(),
-                                terrain.isIndoor());
+                        terrain.getId(),
+                        terrain.getName(),
+                        terrain.getCity(),
+                        terrain.getPricePerHour(),
+                        bankAccounts
+                );
         }
 
         public TerrainResponseDto getTerrainById(Long id) {
                 Terrain terrain = terrainRepository.findById(id)
-                                .orElseThrow(() -> new TerrainNotFoundException(id));
+                        .orElseThrow(() -> new TerrainNotFoundException(id));
                 return toDto(terrain);
         }
 
@@ -72,9 +81,6 @@ public class TerrainService {
                 Terrain terrain = terrainRepository.findById(id)
                                 .orElseThrow(() -> new TerrainNotFoundException(id));
 
-                // Parse amenities JSON string to List
-                List<String> amenitiesList = parseAmenities(terrain.getAmenities());
-
                 // Get image URLs
                 List<String> imageUrls = terrainImageRepository.findByTerrainIdOrderByIsPrimaryDescCreatedAtAsc(id)
                                 .stream()
@@ -86,9 +92,7 @@ public class TerrainService {
                                 terrain.getName(),
                                 terrain.getCity(),
                                 terrain.getPricePerHour(),
-                                terrain.isIndoor(),
                                 terrain.getDescription(),
-                                amenitiesList,
                                 terrain.getSurface(),
                                 terrain.getCapacity(),
                                 terrain.getRating(),
@@ -128,19 +132,6 @@ public class TerrainService {
                                                         review.getCreatedAt());
                                 })
                                 .collect(Collectors.toList());
-        }
-
-        private List<String> parseAmenities(String amenitiesJson) {
-                if (amenitiesJson == null || amenitiesJson.isEmpty()) {
-                        return new ArrayList<>();
-                }
-
-                try {
-                        return objectMapper.readValue(amenitiesJson, new TypeReference<List<String>>() {
-                        });
-                } catch (Exception e) {
-                        return new ArrayList<>();
-                }
         }
 
         public void createReview(Long terrainId, String email, Integer rating, String comment) {
@@ -201,21 +192,12 @@ public class TerrainService {
                                 .name(request.name())
                                 .city(request.city())
                                 .pricePerHour(request.pricePerHour())
-                                .indoor(request.indoor())
                                 .description(request.description())
                                 .surface(request.surface())
                                 .capacity(request.capacity())
                                 .createdAt(java.time.LocalDateTime.now())
                                 .owner(user)
                                 .build();
-
-                if (request.amenities() != null) {
-                        try {
-                                terrain.setAmenities(objectMapper.writeValueAsString(request.amenities()));
-                        } catch (Exception e) {
-                                terrain.setAmenities("[]");
-                        }
-                }
 
                 return toDto(terrainRepository.save(terrain));
         }
@@ -233,19 +215,9 @@ public class TerrainService {
                 terrain.setName(request.name());
                 terrain.setCity(request.city());
                 terrain.setPricePerHour(request.pricePerHour());
-                terrain.setIndoor(request.indoor());
                 terrain.setDescription(request.description());
                 terrain.setSurface(request.surface());
                 terrain.setCapacity(request.capacity());
-
-                if (request.amenities() != null) {
-                        try {
-                                terrain.setAmenities(objectMapper.writeValueAsString(request.amenities()));
-                        } catch (Exception e) {
-                                // ignore
-                        }
-                }
-
                 return toDto(terrainRepository.save(terrain));
         }
 
@@ -287,103 +259,4 @@ public class TerrainService {
                 }
         }
 
-        public void addUserToWhitelistByIdentifier(Long terrainId, String identifier, String adminEmail) {
-                Terrain terrain = terrainRepository.findById(terrainId)
-                                .orElseThrow(() -> new TerrainNotFoundException(terrainId));
-
-                var admin = userRepository.findByEmail(adminEmail)
-                                .orElseThrow(() -> new RuntimeException("Admin not found"));
-
-                validateOwnership(terrain, admin);
-
-                // Try by email first
-                var userToAdd = userRepository.findByEmail(identifier)
-                                .orElse(null);
-
-                if (userToAdd == null) {
-                        // Need to implement findbyPhone if phone exists?
-                        // User entity has 'email', 'name', 'password'. No phone visible in previous
-                        // view_file of User.java (Wait, I should check the view).
-                        // Lines 1-51 of User.java showed: id, name, email, password, roles.
-                        // No phone. So I can only support Email for now.
-                        // If user meant "username" as "identifier", I can check name ? But name is not
-                        // unique usually.
-                        // I'll stick to Email as the primary "login".
-                        throw new UsernameNotFoundException("User not found with identifier: " + identifier);
-                }
-
-                terrain.getWhitelist().add(userToAdd);
-                terrainRepository.save(terrain);
-        }
-
-        public void addUserToWhitelist(Long terrainId, Long userId, String adminEmail) {
-                Terrain terrain = terrainRepository.findById(terrainId)
-                                .orElseThrow(() -> new TerrainNotFoundException(terrainId));
-
-                var admin = userRepository.findByEmail(adminEmail)
-                                .orElseThrow(() -> new RuntimeException("Admin not found"));
-
-                validateOwnership(terrain, admin);
-
-                var userToAdd = userRepository.findById(userId)
-                                .orElseThrow(() -> new UsernameNotFoundException("User to add not found"));
-
-                terrain.getWhitelist().add(userToAdd);
-                terrainRepository.save(terrain);
-        }
-
-        public java.util.Set<com.footbooking.api.booking.dto.UserSummaryDto> getWhitelist(Long terrainId,
-                        String adminEmail) {
-                Terrain terrain = terrainRepository.findById(terrainId)
-                                .orElseThrow(() -> new TerrainNotFoundException(terrainId));
-
-                var admin = userRepository.findByEmail(adminEmail)
-                                .orElseThrow(() -> new RuntimeException("Admin not found"));
-
-                validateOwnership(terrain, admin);
-
-                return terrain.getWhitelist().stream()
-                                .map(u -> new com.footbooking.api.booking.dto.UserSummaryDto(u.getName(), u.getEmail(),
-                                                u.getPhone()))
-                                .collect(Collectors.toSet());
-        }
-
-        public void removeUserFromWhitelist(Long terrainId, String identifier, String adminEmail) {
-                if (identifier == null || "undefined".equalsIgnoreCase(identifier)) {
-                        throw new RuntimeException("Invalid identifier: undefined or null");
-                }
-
-                Terrain terrain = terrainRepository.findById(terrainId)
-                                .orElseThrow(() -> new TerrainNotFoundException(terrainId));
-
-                var admin = userRepository.findByEmail(adminEmail)
-                                .orElseThrow(() -> new RuntimeException("Admin not found"));
-
-                validateOwnership(terrain, admin);
-
-                com.footbooking.api.auth.model.User userToRemove = null;
-
-                // 1. Try to parse as ID
-                try {
-                        Long userId = Long.parseLong(identifier);
-                        userToRemove = terrain.getWhitelist().stream()
-                                        .filter(u -> u.getId().equals(userId))
-                                        .findFirst()
-                                        .orElse(null);
-                } catch (NumberFormatException e) {
-                        // Not an ID, proceed to check as email
-                }
-
-                // 2. If not found by ID, check by Email
-                if (userToRemove == null) {
-                        userToRemove = terrain.getWhitelist().stream()
-                                        .filter(u -> u.getEmail().equalsIgnoreCase(identifier))
-                                        .findFirst()
-                                        .orElseThrow(() -> new UsernameNotFoundException(
-                                                        "User not found in whitelist with identifier: " + identifier));
-                }
-
-                terrain.getWhitelist().remove(userToRemove);
-                terrainRepository.save(terrain);
-        }
 }

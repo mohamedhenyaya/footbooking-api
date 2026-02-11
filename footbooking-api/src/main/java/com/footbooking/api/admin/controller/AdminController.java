@@ -22,9 +22,8 @@ public class AdminController {
     @GetMapping("/bookings")
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
     public ResponseEntity<List<AdminBookingResponseDto>> getIncomingBookings(
-            @RequestParam(required = false) LocalDate date,
-            @RequestParam(required = false) String status) {
-        return ResponseEntity.ok(bookingService.getIncomingBookings(date, status));
+            @RequestParam(required = false) LocalDate date) {
+        return ResponseEntity.ok(bookingService.getIncomingBookings(date));
     }
 
     @PostMapping("/bookings")

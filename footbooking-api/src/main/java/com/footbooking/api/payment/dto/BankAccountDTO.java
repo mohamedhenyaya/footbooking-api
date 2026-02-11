@@ -2,9 +2,8 @@ package com.footbooking.api.payment.dto;
 
 public record BankAccountDTO(
         Long id,
-        String accountHolderName,
+        Long terrainId,
         String bankName,
         String accountNumber,
-        String rib,
         String additionalInfo) {
 }

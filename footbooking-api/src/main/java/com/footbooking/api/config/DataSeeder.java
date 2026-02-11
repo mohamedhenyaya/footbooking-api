@@ -5,11 +5,8 @@ import com.footbooking.api.auth.repository.RoleRepository;
 import com.footbooking.api.auth.model.User;
 import com.footbooking.api.auth.repository.UserRepository;
 import com.footbooking.api.booking.repository.BookingJdbcRepository;
-import com.footbooking.api.bookingrequest.repository.BookingRequestRepository;
 import com.footbooking.api.terrain.model.Terrain;
 import com.footbooking.api.terrain.repository.TerrainRepository;
-import com.footbooking.api.tournament.model.Tournament;
-import com.footbooking.api.tournament.repository.TournamentRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
@@ -26,7 +23,7 @@ import java.util.List;
 import java.util.Random;
 import java.util.Set;
 
-@Component
+//@Component
 @RequiredArgsConstructor
 @Slf4j
 @Transactional
@@ -34,10 +31,8 @@ public class DataSeeder implements CommandLineRunner {
 
         private final UserRepository userRepository;
         private final RoleRepository roleRepository;
-        private final TournamentRepository tournamentRepository;
         private final TerrainRepository terrainRepository;
         private final BookingJdbcRepository bookingJdbcRepository;
-        private final BookingRequestRepository bookingRequestRepository;
         private final PasswordEncoder passwordEncoder;
         private final org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
         private final com.footbooking.api.payment.repository.BankAccountRepository bankAccountRepository;
@@ -49,12 +44,10 @@ public class DataSeeder implements CommandLineRunner {
                 log.info("Starting Data Seeding...");
                 seedRoles();
                 seedUsers();
-                seedTournaments();
                 seedTerrains();
                 seedBankAccounts();
                 // seedBookings(); // Disabled as per user request
                 ensureAssignments();
-                updateSchema();
                 log.info("Data Seeding Completed.");
         }
 
@@ -138,47 +131,6 @@ public class DataSeeder implements CommandLineRunner {
                                 usersToWipeBookings.add(user);
                         }
                 }
-
-                if (!usersToWipeBookings.isEmpty()) {
-                        List<Long> wipeIds = usersToWipeBookings.stream().map(User::getId).toList();
-                        try {
-                                // First delete requests that reference bookings we are about to delete
-                                bookingJdbcRepository.deleteRequestsForBookingsOfUsers(wipeIds);
-                                // Then delete requests made BY these users (just in case they made requests for
-                                // others or unlinked)
-                                bookingRequestRepository.deleteByUserIdIn(wipeIds);
-                        } catch (Exception e) {
-                                log.warn("Error deleting booking requests for wiped users: {}", e.getMessage());
-                        }
-                        bookingJdbcRepository.deleteBookingsByUserIds(wipeIds);
-                        // Reset score to 0 if we wipe bookings? Or 1 if we assume they wanted 1?
-                        // Let's reset to 0 to be consistent with "no bookings".
-                        for (User u : usersToWipeBookings) {
-                                u.setScore(0);
-                                userRepository.save(u);
-                        }
-                        log.info("Wiped bookings and reset score for {} kept users.", usersToWipeBookings.size());
-                }
-
-                if (!usersToDelete.isEmpty()) {
-                        List<Long> userIds = usersToDelete.stream().map(User::getId).toList();
-                        log.info("Cleaning up data for {} users...", userIds.size());
-
-                        // Delete associated bookings and requests first
-                        // Delete booking requests (assuming JPA method exists or we use check)
-                        // If repository method is void deleteByUserIdIn(List<Long> userIds);
-                        try {
-                                bookingJdbcRepository.deleteRequestsForBookingsOfUsers(userIds);
-                                bookingRequestRepository.deleteByUserIdIn(userIds);
-                        } catch (Exception e) {
-                                log.warn("Error deleting booking requests: {}", e.getMessage());
-                        }
-
-                        bookingJdbcRepository.deleteBookingsByUserIds(userIds);
-
-                        userRepository.deleteAll(usersToDelete);
-                        log.info("Deleted {} extra users.", usersToDelete.size());
-                }
         }
 
         private User createUser(String name, String email, String password, Set<Role> roles) {
@@ -197,12 +149,6 @@ public class DataSeeder implements CommandLineRunner {
                                 .build();
         }
 
-        private void seedTournaments() {
-                log.info("Clearing all tournaments...");
-                tournamentRepository.deleteAll();
-                log.info("All tournaments deleted.");
-        }
-
         private void seedTerrains() {
                 if (terrainRepository.count() > 0) {
                         log.info("Terrains already seeded.");
@@ -210,27 +156,26 @@ public class DataSeeder implements CommandLineRunner {
                 }
 
                 List<Terrain> terrains = List.of(
-                                createTerrain("Five Paris 17", "Paris", 80.0, true),
-                                createTerrain("UrbanSoccer La Defense", "Paris", 90.0, true),
-                                createTerrain("Le Five Villette", "Paris", 85.0, true),
-                                createTerrain("Z5 Bois Senart", "Melun", 70.0, true),
-                                createTerrain("Soccer Park Strasbourg", "Strasbourg", 75.0, true),
-                                createTerrain("UrbanSoccer Lyon Parilly", "Lyon", 80.0, false),
-                                createTerrain("FootSal Lille", "Lille", 60.0, true),
-                                createTerrain("Five Bordeaux", "Bordeaux", 70.0, true),
-                                createTerrain("Arena 18", "Marseille", 80.0, false),
-                                createTerrain("Complexe Sportif Toulouse", "Toulouse", 65.0, false));
+                                createTerrain("Five Paris 17", "Paris", 80.0),
+                                createTerrain("UrbanSoccer La Defense", "Paris", 90.0),
+                                createTerrain("Le Five Villette", "Paris", 85.0),
+                                createTerrain("Z5 Bois Senart", "Melun", 70.0),
+                                createTerrain("Soccer Park Strasbourg", "Strasbourg", 75.0),
+                                createTerrain("UrbanSoccer Lyon Parilly", "Lyon", 80.0),
+                                createTerrain("FootSal Lille", "Lille", 60.0),
+                                createTerrain("Five Bordeaux", "Bordeaux", 70.0),
+                                createTerrain("Arena 18", "Marseille", 80.0),
+                                createTerrain("Complexe Sportif Toulouse", "Toulouse", 65.0));
 
                 terrainRepository.saveAll(terrains);
                 log.info("Seeded Terrains.");
         }
 
-        private Terrain createTerrain(String name, String city, Double price, boolean indoor) {
+        private Terrain createTerrain(String name, String city, Double price) {
                 return Terrain.builder()
                                 .name(name)
                                 .city(city)
                                 .pricePerHour(BigDecimal.valueOf(price))
-                                .indoor(indoor)
                                 .createdAt(LocalDateTime.now())
                                 .build();
         }
@@ -249,17 +194,11 @@ public class DataSeeder implements CommandLineRunner {
 
                 // French bank names
                 String[] bankNames = {
-                                "BNP Paribas", "Crédit Agricole", "Société Générale", "Banque Populaire",
+                                "Banquili", "Crédit Agricole", "Société Générale", "Banque Populaire",
                                 "Caisse d'Épargne", "LCL", "Crédit Mutuel", "La Banque Postale",
                                 "CIC", "Boursorama Banque"
                 };
 
-                // Sample account holder names
-                String[] holderNames = {
-                                "Jean Dupont", "Marie Martin", "Pierre Bernard", "Sophie Dubois",
-                                "Luc Moreau", "Claire Laurent", "Antoine Simon", "Isabelle Michel",
-                                "François Lefebvre", "Nathalie Leroy"
-                };
 
                 int accountsCreated = 0;
                 for (int i = 0; i < terrains.size(); i++) {
@@ -267,7 +206,6 @@ public class DataSeeder implements CommandLineRunner {
 
                         // Generate realistic French bank account details
                         String bankName = bankNames[i % bankNames.length];
-                        String holderName = holderNames[i % holderNames.length];
 
                         // Generate French account number (11 digits)
                         String accountNumber = String.format("%011d", 10000000000L + random.nextInt(90000000));
@@ -277,7 +215,6 @@ public class DataSeeder implements CommandLineRunner {
                         String branchCode = String.format("%05d", 10000 + random.nextInt(90000));
                         String accountNum = String.format("%011d", 10000000000L + random.nextInt(90000000));
                         String key = String.format("%02d", random.nextInt(97));
-                        String rib = String.format("FR76 %s %s %s %s", bankCode, branchCode, accountNum, key);
 
                         // Additional info variations
                         String[] additionalInfos = {
@@ -291,10 +228,8 @@ public class DataSeeder implements CommandLineRunner {
 
                         com.footbooking.api.payment.model.BankAccount bankAccount = new com.footbooking.api.payment.model.BankAccount();
                         bankAccount.setTerrainId(terrain.getId());
-                        bankAccount.setAccountHolderName(holderName);
                         bankAccount.setBankName(bankName);
                         bankAccount.setAccountNumber(accountNumber);
-                        bankAccount.setRib(rib);
                         bankAccount.setAdditionalInfo(additionalInfos[i % additionalInfos.length]);
 
                         bankAccountRepository.save(bankAccount);
@@ -339,8 +274,8 @@ public class DataSeeder implements CommandLineRunner {
                         List<Integer> bookedHours = bookingJdbcRepository.findBookedHours(terrain.getId(), date);
                         if (!bookedHours.contains(hour)) {
                                 try {
-                                        bookingJdbcRepository.createBooking(user.getId(), terrain.getId(), date, hour,
-                                                        "confirmée");
+                                        bookingJdbcRepository.createBooking(user.getId(), terrain.getId(), date, hour, null
+                                                        );
                                         created++;
                                 } catch (Exception e) {
                                         // Ignore conflicts
@@ -379,44 +314,5 @@ public class DataSeeder implements CommandLineRunner {
                                 }
                         });
                 });
-        }
-
-        private void updateSchema() {
-                try {
-                        // Ensure status column exists
-                        jdbcTemplate.execute(
-                                        "ALTER TABLE bookings ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'confirmée'");
-                        log.info("Ensured status column exists in bookings table");
-                } catch (Exception e) {
-                        log.warn("Could not add status column: {}", e.getMessage());
-                }
-
-                try {
-                        // Ensure payment_status column exists
-                        jdbcTemplate.execute(
-                                        "ALTER TABLE bookings ADD COLUMN IF NOT EXISTS payment_status VARCHAR(50) DEFAULT 'non_payé'");
-                        log.info("Ensured payment_status column exists in bookings table");
-                } catch (Exception e) {
-                        log.warn("Could not add payment_status column: {}", e.getMessage());
-                }
-
-                try {
-                        // Drop existing constraint if it exists
-                        jdbcTemplate.execute(
-                                        "ALTER TABLE bookings DROP CONSTRAINT IF EXISTS check_payment_status");
-                        log.info("Dropped old payment_status constraint");
-                } catch (Exception e) {
-                        log.warn("Could not drop old constraint: {}", e.getMessage());
-                }
-
-                try {
-                        // Add updated constraint with new status
-                        jdbcTemplate.execute(
-                                        "ALTER TABLE bookings ADD CONSTRAINT check_payment_status " +
-                                                        "CHECK (payment_status IN ('payé', 'non_payé', 'en_attente_validation'))");
-                        log.info("Added updated payment_status constraint");
-                } catch (Exception e) {
-                        log.warn("Could not add payment_status constraint: {}", e.getMessage());
-                }
         }
 }

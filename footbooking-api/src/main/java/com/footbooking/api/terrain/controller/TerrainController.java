@@ -117,32 +117,4 @@ public class TerrainController {
         return ResponseEntity.noContent().build();
     }
 
-    @PostMapping("/{id}/whitelist")
-    public ResponseEntity<?> whitelistUserByIdentifier(
-            @PathVariable Long id,
-            @RequestBody java.util.Map<String, String> body,
-            @AuthenticationPrincipal UserDetails user) {
-        String identifier = body.get("login");
-        if (identifier == null) {
-            return ResponseEntity.badRequest().body(Map.of("error", "Login (email) is required"));
-        }
-        terrainService.addUserToWhitelistByIdentifier(id, identifier, user.getUsername());
-        return ResponseEntity.ok(Map.of("message", "User added to whitelist successfully"));
-    }
-
-    @GetMapping("/{id}/whitelist")
-    public ResponseEntity<java.util.Set<com.footbooking.api.booking.dto.UserSummaryDto>> getWhitelist(
-            @PathVariable Long id,
-            @AuthenticationPrincipal UserDetails user) {
-        return ResponseEntity.ok(terrainService.getWhitelist(id, user.getUsername()));
-    }
-
-    @DeleteMapping("/{id}/whitelist/{identifier}")
-    public ResponseEntity<?> removeFromWhitelist(
-            @PathVariable Long id,
-            @PathVariable String identifier,
-            @AuthenticationPrincipal UserDetails user) {
-        terrainService.removeUserFromWhitelist(id, identifier, user.getUsername());
-        return ResponseEntity.noContent().build();
-    }
 }

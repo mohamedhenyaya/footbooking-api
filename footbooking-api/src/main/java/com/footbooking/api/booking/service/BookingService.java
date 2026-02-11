@@ -6,16 +6,20 @@ import com.footbooking.api.booking.dto.BookingRequestDto;
 import com.footbooking.api.booking.dto.BookingResponseDto;
 import com.footbooking.api.booking.exception.SlotAlreadyBookedException;
 import com.footbooking.api.booking.repository.BookingJdbcRepository;
+import com.footbooking.api.payment.dto.BankAccountDTO; // Import
 import com.footbooking.api.payment.repository.BankAccountRepository;
 import com.footbooking.api.terrain.exception.TerrainNotFoundException;
 import com.footbooking.api.terrain.repository.TerrainRepository;
+import com.footbooking.api.terrain.service.TerrainAvailabilityService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -27,6 +31,7 @@ public class BookingService {
     private final TerrainRepository terrainRepository;
     private final UserRepository userRepository;
     private final BankAccountRepository bankAccountRepository;
+    private final TerrainAvailabilityService terrainAvailabilityService;
 
     public BookingResponseDto createBooking(BookingRequestDto request) {
 
@@ -34,13 +39,13 @@ public class BookingService {
 
         var user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found: " + email));
+        var availability = terrainAvailabilityService.getAvailability(request.terrainId(), request.date());
+        if (!availability.availableHours().contains(request.hour())) {
+            throw new SlotAlreadyBookedException();
+        }
 
         var terrain = terrainRepository.findById(request.terrainId())
                 .orElseThrow(() -> new TerrainNotFoundException(request.terrainId()));
-
-        // Check whitelist
-        boolean isWhitelisted = terrain.getWhitelist().contains(user);
-        String status = isWhitelisted ? "confirmée" : "en_attente";
 
         try {
             Long bookingId = bookingJdbcRepository.createBooking(
@@ -48,22 +53,19 @@ public class BookingService {
                     request.terrainId(),
                     request.date(),
                     request.hour(),
-                    status);
+                    request.moovMoneyNumber()
+                    );
 
-            // Get bank account information if available
-            com.footbooking.api.payment.dto.BankAccountDTO bankAccount = null;
-            var bankAccountOpt = bankAccountRepository.findByTerrainId(request.terrainId());
-
-            if (bankAccountOpt.isPresent()) {
-                var ba = bankAccountOpt.get();
-                bankAccount = new com.footbooking.api.payment.dto.BankAccountDTO(
-                        ba.getId(),
-                        ba.getAccountHolderName(),
-                        ba.getBankName(),
-                        ba.getAccountNumber(),
-                        ba.getRib(),
-                        ba.getAdditionalInfo());
-            }
+            List<BankAccountDTO> bankAccountDTOs = bankAccountRepository.findByTerrainId(request.terrainId())
+                    .stream()
+                    .map(ba -> new BankAccountDTO(
+                            ba.getId(),
+                            ba.getTerrainId(),
+                            ba.getBankName(),
+                            ba.getAccountNumber(),
+                            ba.getAdditionalInfo()))
+                    .collect(Collectors.toList());
+            // ------------------------------------------------------------------
 
             // Increment user score
             user.setScore(user.getScore() + 1);
@@ -76,7 +78,8 @@ public class BookingService {
                     terrain.getCity(),
                     request.date(),
                     request.hour(),
-                    bankAccount);
+                    request.moovMoneyNumber(),
+                    bankAccountDTOs); // On passe la liste
 
         } catch (DuplicateKeyException ex) {
             throw new SlotAlreadyBookedException();
@@ -85,69 +88,15 @@ public class BookingService {
 
     public List<BookingResponseDto> getMyBookings() {
         String email = SecurityContextHolder.getContext().getAuthentication().getName();
-        // System.out.println("DEBUG: getMyBookings called for email: " + email);
 
         Long userId = userRepository.findByEmail(email)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found: " + email))
                 .getId();
 
-        // System.out.println("DEBUG: Fetching bookings for user ID: " + userId);
-
         return bookingJdbcRepository.findBookingsByUserId(userId);
     }
 
-    public void cancelBooking(Long bookingId) {
-        // Restricted to Admin and Superadmin
-        String email = SecurityContextHolder.getContext().getAuthentication().getName();
-        var user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new UsernameNotFoundException("User not found"));
-
-        boolean isSuperAdmin = user.getRoles().stream()
-                .anyMatch(r -> r.getName().equals("SUPERADMIN") || r.getName().equals("ROLE_SUPERADMIN"));
-
-        boolean isAdmin = user.getRoles().stream()
-                .anyMatch(r -> r.getName().equals("ADMIN") || r.getName().equals("ROLE_ADMIN"));
-
-        if (isSuperAdmin) {
-            // Superadmin can delete anything.
-            // We need a generic delete in repository that ignores ownership/user checks?
-            // Currently deleteBooking checks userId. We need a deleteById.
-            // Improvised: deleteBookingAsOwner with owner check bypass?
-            // Or better: add deleteBookingById(id) to repo.
-            // Assuming I need to add it.
-            bookingJdbcRepository.deleteBookingAny(bookingId);
-            return;
-        }
-
-        if (isAdmin) {
-            // Admin can cancel if they own the terrain.
-            boolean deleted = bookingJdbcRepository.deleteBookingAsOwner(bookingId, user.getId());
-            if (!deleted) {
-                throw new RuntimeException("Booking not found or you are not the owner of this terrain");
-            }
-            return;
-        }
-
-        throw new RuntimeException("Only Admin or Superadmin can cancel bookings");
-    }
-
-    public void adminAcceptBooking(Long bookingId) {
-        String email = SecurityContextHolder.getContext().getAuthentication().getName();
-        var admin = userRepository.findByEmail(email)
-                .orElseThrow(() -> new UsernameNotFoundException("User not found"));
-
-        boolean updated = bookingJdbcRepository.updateBookingStatus(bookingId, "confirmée", admin.getId());
-        if (!updated) {
-            throw new RuntimeException("Booking not found or you are not the owner of this terrain");
-        }
-    }
-
-    public void adminCancelBooking(Long bookingId) {
-        cancelBooking(bookingId); // Reuse logic
-    }
-
-    public List<AdminBookingResponseDto> getIncomingBookings(java.time.LocalDate date,
-            String status) {
+    public List<AdminBookingResponseDto> getIncomingBookings(java.time.LocalDate date) {
         String email = SecurityContextHolder.getContext().getAuthentication().getName();
         var user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found"));
@@ -157,29 +106,23 @@ public class BookingService {
 
         List<com.footbooking.api.booking.model.Booking> bookings;
 
-        // Note: the repository uses BookingRepository (JPA interface), not
-        // BookingJdbcRepository
         if (isSuperAdmin) {
-            bookings = bookingRepository.findAllbookings(date, status);
+            bookings = bookingRepository.findAllbookings(date);
         } else {
-            // For regular admin, find bookings for their terrains
-            bookings = bookingRepository.findByTerrainOwnerId(user.getId(), date, status);
+            bookings = bookingRepository.findByTerrainOwnerId(user.getId(), date);
         }
 
-        // Map to DTO
         return bookings.stream().map(b -> new AdminBookingResponseDto(
-                b.getId(),
-                b.getDate(),
-                b.getHour(),
-                b.getStatus(),
-                b.getPaymentStatus(),
-                new com.footbooking.api.booking.dto.UserSummaryDto(
-                        b.getUser().getName(),
-                        b.getUser().getEmail(),
-                        b.getUser().getPhone()),
-                new com.footbooking.api.booking.dto.TerrainSummaryDto(
-                        b.getTerrain().getId(),
-                        b.getTerrain().getName())))
+                        b.getId(),
+                        b.getDate(),
+                        b.getHour(),
+                        new com.footbooking.api.booking.dto.UserSummaryDto(
+                                b.getUser().getName(),
+                                b.getUser().getEmail(),
+                                b.getUser().getPhone()),
+                        new com.footbooking.api.booking.dto.TerrainSummaryDto(
+                                b.getTerrain().getId(),
+                                b.getTerrain().getName())))
                 .toList();
     }
 
@@ -192,12 +135,6 @@ public class BookingService {
                 .orElseThrow(() -> new TerrainNotFoundException(request.terrainId()));
 
         if (terrain.getOwner() == null || !terrain.getOwner().getId().equals(admin.getId())) {
-            // Check superadmin? User request says Admin, implies Owner. Superadmin usually
-            // can do all.
-            // Staying safe: strictly owner as requested.
-            // "Le backend doit empêcher un Admin de réserver un terrain dont il n'est PAS
-            // propriétaire"
-            // But if I am superadmin, I might want to? Assuming Admin rule for now.
             boolean isSuper = admin.getRoles().stream().anyMatch(r -> r.getName().contains("SUPERADMIN"));
             if (!isSuper) {
                 throw new RuntimeException("Unauthorized: You do not own this terrain");
@@ -210,13 +147,20 @@ public class BookingService {
                     request.terrainId(),
                     request.date(),
                     request.hour(),
-                    "confirmée"); // Always confirmed for admin
+                    request.moovMoneyNumber()
+            );
 
+            // Pour l'admin, on peut renvoyer la réponse sans les banques (ou avec, au choix)
+            // Ici j'utilise le constructeur simplifié qui mettra les banques à null
             return new BookingResponseDto(
                     bookingId,
                     request.terrainId(),
+                    terrain.getName(),
+                    terrain.getCity(),
                     request.date(),
-                    request.hour());
+                    request.hour(),
+                    request.moovMoneyNumber(),
+                    null);
 
         } catch (DuplicateKeyException ex) {
             throw new SlotAlreadyBookedException();

@@ -14,11 +14,7 @@ public record TerrainRequestDto(
 
         @NotNull(message = "Price is required") @Positive(message = "Price must be positive") BigDecimal pricePerHour,
 
-        boolean indoor,
-
         String description,
-
-        List<String> amenities,
 
         String surface,
 

@@ -9,5 +9,6 @@ import java.time.LocalDate;
 public record BookingRequestDto(
         @NotNull Long terrainId,
         @NotNull LocalDate date,
-        @Min(0) @Max(23) int hour
+        @Min(0) @Max(23) int hour,
+        @NotNull String moovMoneyNumber
 ) {}
